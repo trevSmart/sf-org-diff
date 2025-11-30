@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrgDiff - Comparador de Metadata Salesforce</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <!-- Pantalla 1: Selección de Orgs -->
+    <div id="screen1" class="screen">
+        <div class="container">
+            <h1>OrgDiff - Comparador de Metadata Salesforce</h1>
+            <div class="org-selection">
+                <div class="org-selection-header">
+                    <div id="loadingMessage" class="loading-message">Cargando orgs de Salesforce...</div>
+                    <button id="refreshOrgsBtn" class="btn-secondary">Actualizar lista de orgs</button>
+                </div>
+                <div class="org-selection-row">
+                    <div class="org-selector">
+                        <label for="orgA">Org A:</label>
+                        <select id="orgA" name="orgA" disabled>
+                            <option value="">-- Cargando orgs... --</option>
+                        </select>
+                    </div>
+                    <div class="org-selector">
+                        <label for="orgB">Org B:</label>
+                        <select id="orgB" name="orgB" disabled>
+                            <option value="">-- Cargando orgs... --</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="continueBtn" class="btn-primary">Continuar</button>
+            </div>
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Pantalla 2: TreeView de Metadata Types -->
+    <div id="screen2" class="screen" style="display: none;">
+        <div class="container">
+            <div class="screen-header">
+                <h1>Metadata Types</h1>
+                <button id="backBtn" class="btn-secondary">← Volver</button>
+            </div>
+            <div class="org-info">
+                <div class="org-info-item">
+                    <strong>Org A:</strong> <span id="orgAInfo"></span>
+                </div>
+                <div class="org-info-item">
+                    <strong>Org B:</strong> <span id="orgBInfo"></span>
+                </div>
+            </div>
+            <div id="metadataTypesWarning" class="warning-message" style="display: none;"></div>
+            <div class="main-content">
+                <div class="treeview-container">
+                    <div class="filter-container">
+                        <input type="text" id="metadataFilter" class="metadata-filter" placeholder="Filtrar tipos de metadato...">
+                    </div>
+                    <div id="treeview" class="treeview"></div>
+                </div>
+                <!-- Panel de diff viewer -->
+                <div id="diffPanel" class="diff-panel">
+                    <div class="diff-panel-header">
+                        <h2 id="diffPanelTitle">Comparación de Componente</h2>
+                        <button id="closeDiffBtn" class="btn-secondary">✕ Cerrar</button>
+                    </div>
+                    <div class="diff-labels">
+                        <span class="diff-label-left" id="diffLabelA">Org A</span>
+                        <span class="diff-label-right" id="diffLabelB">Org B</span>
+                    </div>
+                    <div id="diffViewer" class="diff-viewer"></div>
+                    <div class="org-a-code-container">
+                        <div class="org-a-code-label">Código Org A:</div>
+                        <textarea id="orgACodeTextarea" class="org-a-code-textarea" readonly></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+</body>
+</html>
