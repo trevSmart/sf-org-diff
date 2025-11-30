@@ -777,7 +777,7 @@ export class TreeView {
 
     // Filtrar nodos
     allNodes.forEach(node => {
-      const label = node.querySelector('.node-label');
+      const _label = node.querySelector('.node-label');
       const nodeName = node.querySelector('.node-name');
       const nodeText = nodeName ? nodeName.textContent.toLowerCase() : '';
 

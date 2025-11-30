@@ -57,7 +57,7 @@ function loadOrgsFromStorage() {
  * @param {boolean} forceRefresh - Si es true, ignora el cache y fuerza la actualización
  * @returns {Promise<void>}
  */
-async function loadOrgs(forceRefresh = false) {
+async function loadOrgs(_forceRefresh = false) {
   // Mostrar mensaje de carga con indicador animado y deshabilitar combos
   loadingMessage.innerHTML = '<span class="loading-spinner"></span> Cargando orgs de Salesforce...';
   loadingMessage.style.display = 'block';

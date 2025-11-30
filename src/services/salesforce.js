@@ -225,7 +225,7 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
-  } catch (error) {
+  } catch (_error) {
     // El directorio ya existe, continuar
   }
 
@@ -259,7 +259,7 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     // Limpiar el directorio temporal en caso de error
     try {
       await rm(retrieveDir, { recursive: true, force: true });
-    } catch (cleanupError) {
+    } catch (_cleanupError) {
       // Ignorar errores de limpieza
     }
 
@@ -286,7 +286,7 @@ async function findComponentFile(baseDir, metadataType, componentName) {
     try {
       const content = await readFile(filePath, 'utf-8');
       return content;
-    } catch (error) {
+    } catch (_error) {
       // Continuar buscando
       continue;
     }
@@ -352,7 +352,7 @@ async function searchFileRecursively(dir, componentName, metadataType) {
         }
       }
     }
-  } catch (error) {
+  } catch (_error) {
     // Ignorar errores de lectura de directorio
   }
 
@@ -420,59 +420,55 @@ function getPossibleComponentPaths(baseDir, metadataType, componentName) {
  * @returns {Promise<{areEqual: boolean, contentA: string, contentB: string, lastModifiedA: string, lastModifiedB: string}>}
  */
 export async function compareMetadataComponent(metadataType, componentName, orgAliasA, orgAliasB) {
-  try {
-    // Obtener información del componente en ambas orgs (ya debería estar en cache)
-    const [componentsA, componentsB] = await Promise.all([
-      listMetadataComponents(metadataType, orgAliasA),
-      listMetadataComponents(metadataType, orgAliasB)
-    ]);
+  // Obtener información del componente en ambas orgs (ya debería estar en cache)
+  const [componentsA, componentsB] = await Promise.all([
+    listMetadataComponents(metadataType, orgAliasA),
+    listMetadataComponents(metadataType, orgAliasB)
+  ]);
 
-    const componentA = componentsA.find(c => {
-      const name = c.fullName || c.name || c.fileName;
-      return name === componentName;
-    });
+  const componentA = componentsA.find(c => {
+    const name = c.fullName || c.name || c.fileName;
+    return name === componentName;
+  });
 
-    const componentB = componentsB.find(c => {
-      const name = c.fullName || c.name || c.fileName;
-      return name === componentName;
-    });
+  const componentB = componentsB.find(c => {
+    const name = c.fullName || c.name || c.fileName;
+    return name === componentName;
+  });
 
-    if (!componentA || !componentB) {
-      return {
-        areEqual: false,
-        reason: 'Component not found in one or both orgs',
-        contentA: '',
-        contentB: '',
-        lastModifiedA: componentA?.lastModifiedDate || '',
-        lastModifiedB: componentB?.lastModifiedDate || ''
-      };
-    }
-
-    // IMPORTANTE: La comparación por metadatos (fechas, etc.) NO es fiable porque:
-    // - Una clase puede crearse en un org un día y desplegarse a otro org meses después
-    // - Las fechas serán diferentes pero el contenido puede ser idéntico
-    // - El manageableState puede ser diferente pero el contenido igual
-    //
-    // Por lo tanto, NO podemos determinar si son iguales solo con metadatos.
-    // La única forma fiable es comparar el contenido real, pero eso es lento.
-    //
-    // Estrategia: Retornar "unknown" para que el frontend muestre "?" y solo
-    // comparar el contenido real cuando el usuario haga clic para ver el diff.
-    //
-    // Alternativamente, podríamos hacer una comparación rápida del contenido
-    // usando retrieve, pero eso sería muy lento para 1000 componentes.
-
-    // Por ahora, retornamos "unknown" para indicar que necesitamos comparar el contenido
-    // El frontend mostrará "?" y cuando el usuario haga clic, se comparará el contenido real
+  if (!componentA || !componentB) {
     return {
-      areEqual: null, // null = desconocido, necesita comparación de contenido
-      contentA: JSON.stringify(componentA),
-      contentB: JSON.stringify(componentB),
-      lastModifiedA: componentA.lastModifiedDate,
-      lastModifiedB: componentB.lastModifiedDate,
-      reason: 'Content comparison required - metadata comparison is not reliable'
+      areEqual: false,
+      reason: 'Component not found in one or both orgs',
+      contentA: '',
+      contentB: '',
+      lastModifiedA: componentA?.lastModifiedDate || '',
+      lastModifiedB: componentB?.lastModifiedDate || ''
     };
-  } catch (error) {
-    throw error;
   }
+
+  // IMPORTANTE: La comparación por metadatos (fechas, etc.) NO es fiable porque:
+  // - Una clase puede crearse en un org un día y desplegarse a otro org meses después
+  // - Las fechas serán diferentes pero el contenido puede ser idéntico
+  // - El manageableState puede ser diferente pero el contenido igual
+  //
+  // Por lo tanto, NO podemos determinar si son iguales solo con metadatos.
+  // La única forma fiable es comparar el contenido real, pero eso es lento.
+  //
+  // Estrategia: Retornar "unknown" para que el frontend muestre "?" y solo
+  // comparar el contenido real cuando el usuario haga clic para ver el diff.
+  //
+  // Alternativamente, podríamos hacer una comparación rápida del contenido
+  // usando retrieve, pero eso sería muy lento para 1000 componentes.
+
+  // Por ahora, retornamos "unknown" para indicar que necesitamos comparar el contenido
+  // El frontend mostrará "?" y cuando el usuario haga clic, se comparará el contenido real
+  return {
+    areEqual: null, // null = desconocido, necesita comparación de contenido
+    contentA: JSON.stringify(componentA),
+    contentB: JSON.stringify(componentB),
+    lastModifiedA: componentA.lastModifiedDate,
+    lastModifiedB: componentB.lastModifiedDate,
+    reason: 'Content comparison required - metadata comparison is not reliable'
+  };
 }

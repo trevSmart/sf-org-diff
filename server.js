@@ -162,7 +162,7 @@ app.use('/api/*', (req, res) => {
 });
 
 // Middleware para manejar errores en las rutas (debe ir después de todas las rutas)
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Error en middleware:', err);
   console.error('Stack:', err.stack);
   if (!res.headersSent) {
