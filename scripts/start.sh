@@ -27,6 +27,7 @@ kill_port_processes() {
 kill_port_processes
 
 # También matar procesos de node que ejecuten server.js (por si acaso)
+pkill -f "node.*src/server.js" 2>/dev/null
 pkill -f "node.*server.js" 2>/dev/null
 
 # Esperar un momento para asegurar que los procesos se hayan terminado
@@ -51,7 +52,7 @@ fi
 echo -e "${YELLOW}Iniciando servidor...${NC}"
 
 # Iniciar el servidor en background
-node server.js > /dev/null 2>&1 &
+node src/server.js > /dev/null 2>&1 &
 SERVER_PID=$!
 
 # Esperar a que el servidor esté listo (máximo 10 segundos)

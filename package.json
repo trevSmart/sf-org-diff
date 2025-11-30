@@ -2,11 +2,11 @@
   "name": "orgdiff",
   "version": "1.0.0",
   "description": "Herramienta web para comparar metadata entre dos orgs de Salesforce",
-  "main": "server.js",
+  "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "start:app": "./scripts/start.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"

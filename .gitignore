@@ -37,4 +37,7 @@ build/
 tmp/
 temp/
 
-
+.sf/
+.sfdx/
+force-app/
+sfdx-project.json

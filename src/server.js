@@ -8,7 +8,7 @@ import {
   listMetadataComponents,
   compareMetadataComponent,
   retrieveMetadataComponent
-} from './src/services/salesforce.js';
+} from './services/salesforce.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,7 +98,7 @@ app.get('/api/metadata/:orgAlias/:metadataType', async (req, res) => {
 });
 
 // Servir archivos estáticos desde public/ (después de las rutas de API)
-app.use(express.static(join(__dirname, 'public')));
+app.use(express.static(join(__dirname, '..', 'public')));
 
 // Endpoint para obtener el contenido de un componente
 app.get('/api/component-content/:orgAlias/:metadataType/:componentName', async (req, res) => {
