@@ -1,22 +1,20 @@
 import { BaseDiffEditor } from './baseDiffEditor.js';
 import { MergeView } from '@codemirror/merge';
-import { EditorView, basicSetup } from 'codemirror';
+import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { xml } from '@codemirror/lang-xml';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { json } from '@codemirror/lang-json';
 
-const libs = { MergeView, EditorView, basicSetup, javascript, xml, html, css, json };
-
 function resolveLanguageExtension(language) {
   const lang = (language || '').toLowerCase();
-  if (lang.includes('apex')) return libs.javascript();
-  if (lang.includes('javascript')) return libs.javascript();
-  if (lang.includes('xml')) return libs.xml();
-  if (lang.includes('html')) return libs.html();
-  if (lang.includes('css')) return libs.css();
-  if (lang.includes('json')) return libs.json();
+  if (lang.includes('apex')) return javascript();
+  if (lang.includes('javascript')) return javascript();
+  if (lang.includes('xml')) return xml();
+  if (lang.includes('html')) return html();
+  if (lang.includes('css')) return css();
+  if (lang.includes('json')) return json();
   return []; // fallback plain text
 }
 
@@ -33,9 +31,9 @@ export class CodeMirrorDiffEditor extends BaseDiffEditor {
     container.innerHTML = '';
     const languageExt = resolveLanguageExtension(language);
 
-    this.view = new libs.MergeView({
-      a: { doc: originalContent, extensions: [libs.basicSetup, languageExt].flat() },
-      b: { doc: modifiedContent, extensions: [libs.basicSetup, languageExt].flat() },
+    this.view = new MergeView({
+      a: { doc: originalContent, extensions: [basicSetup, languageExt].flat() },
+      b: { doc: modifiedContent, extensions: [basicSetup, languageExt].flat() },
       parent: container,
       orientation: 'a-b'
     });

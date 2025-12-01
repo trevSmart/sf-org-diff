@@ -29,8 +29,28 @@ app.use('/monaco', express.static(MONACO_DIR));
 // Servir Font Awesome localmente
 app.use('/fontawesome', express.static(FONTAWESOME_DIR));
 
-// Servir CodeMirror y sus dependencias desde node_modules para evitar problemas con CDN
-app.use('/node_modules', express.static(NODE_MODULES_DIR));
+// Servir solo los paquetes de CodeMirror necesarios (no todo node_modules por seguridad)
+const allowedPackages = ['codemirror', '@codemirror', '@lezer', '@marijn', 'style-mod', 'w3c-keyname', 'crelt'];
+app.use('/node_modules', (req, res, next) => {
+  // Extract the package name from the path
+  const pathParts = req.path.split('/').filter(Boolean);
+  if (pathParts.length === 0) {
+    return res.status(404).send('Not found');
+  }
+  
+  // Check if it's a scoped package (@scope/package) or regular package
+  const packageName = pathParts[0].startsWith('@') 
+    ? `${pathParts[0]}/${pathParts[1]}` 
+    : pathParts[0];
+  const packageScope = pathParts[0].startsWith('@') ? pathParts[0] : pathParts[0];
+  
+  // Only allow specific packages needed for CodeMirror
+  if (!allowedPackages.some(pkg => packageScope === pkg || packageName.startsWith(pkg))) {
+    return res.status(403).send('Forbidden');
+  }
+  
+  next();
+}, express.static(NODE_MODULES_DIR));
 
 // Endpoint para obtener la lista de orgs
 app.get('/api/orgs', async (req, res) => {
