@@ -47,6 +47,8 @@ export class TreeView {
     this.componentCounts = new Map(); // Cache de conteos de componentes por metadata type
     this.componentSymbols = new Map(); // Referencias a los símbolos para actualizarlos tras comparar
     this.bundleFilesCache = new Map(); // Cache de archivos por componente bundle
+    this.currentTypeFilter = ''; // Filtro actual de tipos aplicado
+    this.currentComponentFilter = ''; // Filtro actual de componentes aplicado
   }
 
   getBundleTypes() {
@@ -209,6 +211,11 @@ export class TreeView {
       if (this.loadedComponents.has(metadataTypeName)) {
         this.renderComponents(childrenContainer, this.loadedComponents.get(metadataTypeName), metadataTypeName);
         childrenContainer.style.display = 'block';
+
+        // Reaplicar los filtros si hay alguno activo
+        if (this.currentTypeFilter || this.currentComponentFilter) {
+          this.filterMetadataTypes(this.currentTypeFilter, this.currentComponentFilter);
+        }
       } else {
         // Mostrar mensaje de carga con spinner
         const loadingLi = document.createElement('li');
@@ -255,6 +262,11 @@ export class TreeView {
 
               // Renderizar componentes (pasar metadataTypeName para las comparaciones)
               this.renderComponents(childrenContainer, unionComponents, metadataTypeName);
+
+              // Reaplicar los filtros si hay alguno activo
+              if (this.currentTypeFilter || this.currentComponentFilter) {
+                this.filterMetadataTypes(this.currentTypeFilter, this.currentComponentFilter);
+              }
             } else {
               const errorLi = document.createElement('li');
               errorLi.className = 'error';
@@ -658,14 +670,11 @@ export class TreeView {
 
     // Hacer la carga asíncrona sin bloquear la UI
     try {
-      // Obtener contenido de ambas orgs
-      const [responseA, responseB] = await Promise.all([
-        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`),
-        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`)
+      // Obtener contenido de ambas orgs en paralelo (peticiones y parsing JSON)
+      const [dataA, dataB] = await Promise.all([
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`).then(res => res.json()),
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`).then(res => res.json())
       ]);
-
-      const dataA = await responseA.json();
-      const dataB = await responseB.json();
 
       if (dataA.success && dataB.success) {
         // Determinar el lenguaje según el tipo de metadata
@@ -763,6 +772,11 @@ export class TreeView {
     try {
       const filesData = await this.loadBundleFiles(metadataTypeName, componentName);
       this.renderBundleFiles(childrenContainer, filesData, metadataTypeName, componentName);
+
+      // Reaplicar los filtros si hay alguno activo
+      if (this.currentTypeFilter || this.currentComponentFilter) {
+        this.filterMetadataTypes(this.currentTypeFilter, this.currentComponentFilter);
+      }
     } catch (error) {
       console.error('Error loading bundle files:', error);
       childrenContainer.innerHTML = '';
@@ -1142,30 +1156,151 @@ export class TreeView {
   }
 
   /**
-   * Filtra los nodos de metadata types según el texto de búsqueda
-   * @param {string} filterText - Texto para filtrar
+   * Convierte un patrón con comodines "*" en una expresión regular
+   * @param {string} pattern - Patrón con comodines (ej: "Test*", "*Service", "My*Class")
+   * @param {boolean} exactMatch - Si es true, requiere coincidencia exacta (^...$), si es false, busca parcial
+   * @returns {RegExp} - Expresión regular para hacer match
+   */
+  patternToRegex(pattern, exactMatch = false) {
+    // Escapar caracteres especiales de regex excepto "*"
+    const escaped = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+
+    if (exactMatch) {
+      return new RegExp(`^${escaped}$`, 'i');
+    } else {
+      // Para búsqueda parcial, no usar ^ y $, solo buscar que contenga el patrón
+      return new RegExp(escaped, 'i');
+    }
+  }
+
+  /**
+   * Verifica si un texto coincide con alguno de los patrones (términos con comodines)
+   * @param {string} text - Texto a verificar
+   * @param {string} filterText - Texto del filtro con múltiples términos separados por espacios
+   * @returns {boolean} - true si el texto coincide con al menos uno de los patrones
+   */
+  matchesFilterPattern(text, filterText) {
+    if (!filterText || !filterText.trim()) return true;
+
+    const textLower = text.toLowerCase();
+    // Dividir en términos y filtrar vacíos, convertir a lowercase para case insensitive
+    const terms = filterText.trim().toLowerCase().split(/\s+/).filter(term => term.length > 0);
+
+    // Si no hay términos, mostrar todo
+    if (terms.length === 0) return true;
+
+    // Verificar si alguno de los términos coincide
+    return terms.some(term => {
+      // Si el término contiene "*", usar patrón de comodines con coincidencia exacta
+      // Si no contiene "*", hacer búsqueda parcial (contains)
+      const hasWildcard = term.includes('*');
+      const regex = this.patternToRegex(term, hasWildcard);
+      return regex.test(textLower);
+    });
+  }
+
+  /**
+   * Filtra los nodos de metadata types y sus componentes según los filtros de búsqueda
+   * Soporta múltiples términos separados por espacios y comodines "*"
+   * @param {string} typeFilterText - Texto para filtrar tipos de metadata (puede contener múltiples términos y comodines)
+   * @param {string} componentFilterText - Texto para filtrar componentes (puede contener múltiples términos y comodines)
    * @returns {number} - Número de nodos visibles después del filtro
    */
-  filterMetadataTypes(filterText) {
-    const filterLower = filterText.toLowerCase().trim();
-    const allNodes = this.container.querySelectorAll('.tree-node');
+  filterMetadataTypes(typeFilterText = '', componentFilterText = '') {
+    // Guardar los filtros actuales para reaplicarlos cuando se carguen nuevos componentes
+    this.currentTypeFilter = typeFilterText || '';
+    this.currentComponentFilter = componentFilterText || '';
 
-    if (!filterLower) {
-      // Si no hay filtro, mostrar todos los nodos
+    const typeFilter = (typeFilterText || '').trim();
+    const componentFilter = (componentFilterText || '').trim();
+    const allNodes = this.container.querySelectorAll('.tree-node[data-metadata-type]');
+
+    // Si no hay filtros, mostrar todos los nodos y componentes
+    if (!typeFilter && !componentFilter) {
       allNodes.forEach(node => {
         node.style.display = '';
+        // Mostrar todos los componentes
+        const childrenContainer = node.querySelector('.tree-children');
+        if (childrenContainer) {
+          const components = childrenContainer.querySelectorAll('.tree-leaf, .bundle-node');
+          components.forEach(component => {
+            component.style.display = '';
+            // También mostrar todos los bundle files
+            const bundleFiles = component.querySelectorAll('.bundle-file');
+            bundleFiles.forEach(bundleFile => {
+              bundleFile.style.display = '';
+            });
+          });
+        }
       });
       return allNodes.length;
     }
 
-    // Filtrar nodos
+    // Filtrar nodos de tipos de metadata y sus componentes
     let visibleCount = 0;
     allNodes.forEach(node => {
-      const _label = node.querySelector('.node-label');
       const nodeName = node.querySelector('.node-name');
-      const nodeText = nodeName ? nodeName.textContent.toLowerCase() : '';
+      const nodeText = nodeName ? nodeName.textContent : '';
+      const childrenContainer = node.querySelector('.tree-children');
 
-      if (nodeText.includes(filterLower)) {
+      // Verificar si el tipo de metadata coincide con el filtro de tipos
+      const typeMatches = this.matchesFilterPattern(nodeText, typeFilter);
+
+      // Filtrar componentes dentro de este tipo
+      let hasVisibleComponents = false;
+      if (childrenContainer) {
+        const components = childrenContainer.querySelectorAll('.tree-leaf, .bundle-node');
+        components.forEach(component => {
+          const componentName = component.querySelector('.component-name');
+          const componentText = componentName ? componentName.textContent : '';
+
+          // Verificar si el componente coincide con el filtro de componentes
+          const componentMatches = this.matchesFilterPattern(componentText, componentFilter);
+
+          // También verificar bundle files si es un bundle component
+          let bundleFilesMatch = false;
+          if (component.classList.contains('bundle-node')) {
+            const bundleFiles = component.querySelectorAll('.bundle-file');
+            bundleFiles.forEach(bundleFile => {
+              const bundleFileName = bundleFile.querySelector('.component-name');
+              const bundleFileText = bundleFileName ? bundleFileName.textContent : '';
+              if (this.matchesFilterPattern(bundleFileText, componentFilter)) {
+                bundleFilesMatch = true;
+                bundleFile.style.display = '';
+              } else {
+                bundleFile.style.display = 'none';
+              }
+            });
+          }
+
+          // Mostrar componente si coincide con el filtro de componentes
+          // O si no hay filtro de componentes pero sí hay filtro de tipos (y el tipo coincide)
+          if (componentFilter) {
+            if (componentMatches || bundleFilesMatch) {
+              component.style.display = '';
+              hasVisibleComponents = true;
+            } else {
+              component.style.display = 'none';
+            }
+          } else {
+            // Si no hay filtro de componentes, mostrar todos los componentes
+            component.style.display = '';
+            if (componentMatches || bundleFilesMatch) {
+              hasVisibleComponents = true;
+            }
+          }
+        });
+      }
+
+      // Mostrar el tipo de metadata si:
+      // 1. El tipo coincide con el filtro de tipos (si hay filtro de tipos), Y
+      // 2. (No hay filtro de componentes O algún componente coincide con el filtro de componentes)
+      const shouldShowType = typeFilter ? typeMatches : true;
+      const shouldShowComponents = componentFilter ? hasVisibleComponents : true;
+
+      if (shouldShowType && shouldShowComponents) {
         node.style.display = '';
         visibleCount++;
       } else {

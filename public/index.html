@@ -119,11 +119,29 @@
                 <div class="treeview-container" id="treeviewContainer">
                     <div id="treeview" class="treeview">
                         <div class="filter-wrapper">
-                            <input type="text" id="metadataFilter" class="metadata-filter" placeholder="Filtrar tipos de metadato...">
-                            <button type="button" id="clearFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
-                                <i class="fas fa-times"></i>
-                            </button>
-                            <div id="metadataSuggestions" class="metadata-suggestions"></div>
+                            <div class="filter-input-group">
+                                <label for="metadataTypeFilter" class="filter-label">
+                                    <i class="fas fa-filter"></i> Filtrar tipos de metadata:
+                                </label>
+                                <div class="filter-input-wrapper">
+                                    <input type="text" id="metadataTypeFilter" class="metadata-filter" placeholder="Ej: ApexClass Trigger* *Flow (múltiples términos, * comodín)">
+                                    <button type="button" id="clearTypeFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div id="metadataTypeSuggestions" class="metadata-suggestions"></div>
+                            </div>
+                            <div class="filter-input-group">
+                                <label for="componentFilter" class="filter-label">
+                                    <i class="fas fa-search"></i> Filtrar componentes:
+                                </label>
+                                <div class="filter-input-wrapper">
+                                    <input type="text" id="componentFilter" class="metadata-filter" placeholder="Ej: MyClass Test* *Service (múltiples términos, * comodín)">
+                                    <button type="button" id="clearComponentFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

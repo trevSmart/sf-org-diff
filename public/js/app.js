@@ -23,9 +23,11 @@ const errorMessage = document.getElementById('errorMessage');
 const orgAInfo = document.getElementById('orgAInfo');
 const orgBInfo = document.getElementById('orgBInfo');
 const loadingMessage = document.getElementById('loadingMessage');
-const metadataFilter = document.getElementById('metadataFilter');
-const metadataSuggestions = document.getElementById('metadataSuggestions');
-const clearFilterBtn = document.getElementById('clearFilterBtn');
+const metadataTypeFilter = document.getElementById('metadataTypeFilter');
+const componentFilter = document.getElementById('componentFilter');
+const metadataTypeSuggestions = document.getElementById('metadataTypeSuggestions');
+const clearTypeFilterBtn = document.getElementById('clearTypeFilterBtn');
+const clearComponentFilterBtn = document.getElementById('clearComponentFilterBtn');
 const diffEditorSelect = document.getElementById('diffEditorSelect');
 const backBtn = document.getElementById('backBtn');
 const closeDiffBtn = document.getElementById('closeDiffBtn');
@@ -203,11 +205,11 @@ async function autoLoadDevMode() {
     // Usar un intervalo para verificar cuando los nodes estén disponibles
     const checkAndApplyFilter = () => {
       const nodes = document.querySelectorAll('.tree-node');
-      if (nodes.length > 0 && metadataFilter && treeView) {
+      if (nodes.length > 0 && metadataTypeFilter && treeView) {
         // Los nodes ya están renderizados, aplicar el filtro
-        metadataFilter.value = 'trigger';
-        const visibleCount = treeView.filterMetadataTypes('trigger');
-        metadataFilter.blur();
+        metadataTypeFilter.value = 'trigger';
+        const visibleCount = treeView.filterMetadataTypes('trigger', '');
+        metadataTypeFilter.blur();
 
         // Si solo queda un nodo visible, expandirlo automáticamente
         if (visibleCount === 1) {
@@ -439,9 +441,13 @@ async function showScreen2() {
           // Renderizar el treeview con todos los tipos únicos
           treeView.renderMetadataTypes(uniqueTypes);
 
-          // Aplicar el filtro si ya hay un término en el input de filtro
-          if (metadataFilter && metadataFilter.value.trim()) {
-            treeView.filterMetadataTypes(metadataFilter.value);
+          // Aplicar los filtros si ya hay términos en los inputs
+          if (metadataTypeFilter || componentFilter) {
+            const typeFilter = metadataTypeFilter?.value || '';
+            const componentFilterText = componentFilter?.value || '';
+            if (typeFilter.trim() || componentFilterText.trim()) {
+              treeView.filterMetadataTypes(typeFilter, componentFilterText);
+            }
           }
         }
       } else {
@@ -513,6 +519,52 @@ function checkMetadataTypesDifference(typesA, typesB) {
 }
 
 /**
+ * Convierte un patrón con comodines "*" en una expresión regular
+ * @param {string} pattern - Patrón con comodines (ej: "Test*", "*Service", "My*Class")
+ * @param {boolean} exactMatch - Si es true, requiere coincidencia exacta (^...$), si es false, busca parcial
+ * @returns {RegExp} - Expresión regular para hacer match
+ */
+function patternToRegex(pattern, exactMatch = false) {
+  // Escapar caracteres especiales de regex excepto "*"
+  const escaped = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+
+  if (exactMatch) {
+    return new RegExp(`^${escaped}$`, 'i');
+  } else {
+    // Para búsqueda parcial, no usar ^ y $, solo buscar que contenga el patrón
+    return new RegExp(escaped, 'i');
+  }
+}
+
+/**
+ * Verifica si un texto coincide con alguno de los patrones (términos con comodines)
+ * @param {string} text - Texto a verificar
+ * @param {string} filterText - Texto del filtro con múltiples términos separados por espacios
+ * @returns {boolean} - true si el texto coincide con al menos uno de los patrones
+ */
+function matchesFilterPattern(text, filterText) {
+  if (!filterText || !filterText.trim()) return true;
+
+  const textLower = text.toLowerCase();
+  // Dividir en términos y filtrar vacíos, convertir a lowercase para case insensitive
+  const terms = filterText.trim().toLowerCase().split(/\s+/).filter(term => term.length > 0);
+
+  // Si no hay términos, mostrar todo
+  if (terms.length === 0) return true;
+
+  // Verificar si alguno de los términos coincide
+  return terms.some(term => {
+    // Si el término contiene "*", usar patrón de comodines con coincidencia exacta
+    // Si no contiene "*", hacer búsqueda parcial (contains)
+    const hasWildcard = term.includes('*');
+    const regex = patternToRegex(term, hasWildcard);
+    return regex.test(textLower);
+  });
+}
+
+/**
  * Actualiza las opciones del filtro (datalist) con los tipos de metadata disponibles
  * @param {Array} metadataTypes - Lista de tipos de metadata
  */
@@ -522,37 +574,38 @@ function updateMetadataFilterOptions(metadataTypes) {
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
 
-  renderMetadataSuggestions(metadataFilter?.value || '');
+  renderMetadataTypeSuggestions(metadataTypeFilter?.value || '');
   updateClearButtonVisibility();
 }
 
-function renderMetadataSuggestions(query) {
-  if (!metadataSuggestions || !metadataFilter) return;
+function renderMetadataTypeSuggestions(query) {
+  if (!metadataTypeSuggestions || !metadataTypeFilter) return;
 
   // Solo mostrar sugerencias si el input tiene focus
-  if (document.activeElement !== metadataFilter) {
-    metadataSuggestions.style.display = 'none';
+  if (document.activeElement !== metadataTypeFilter) {
+    metadataTypeSuggestions.style.display = 'none';
     return;
   }
 
   const filterLower = (query || '').toLowerCase();
-  metadataSuggestions.innerHTML = '';
+  metadataTypeSuggestions.innerHTML = '';
 
   // Actualizar visibilidad del botón de limpiar
   updateClearButtonVisibility();
 
   // Si no hay tipos de metadata cargados, no mostrar suggestions
   if (!metadataTypeNames || metadataTypeNames.length === 0) {
-    metadataSuggestions.style.display = 'none';
+    metadataTypeSuggestions.style.display = 'none';
     return;
   }
 
+  // Filtrar usando el patrón con comodines
   const matches = metadataTypeNames
-    .filter(name => name.toLowerCase().includes(filterLower))
+    .filter(name => matchesFilterPattern(name, query))
     .slice(0, 200);
 
   if (!matches.length) {
-    metadataSuggestions.style.display = 'none';
+    metadataTypeSuggestions.style.display = 'none';
     return;
   }
 
@@ -562,44 +615,64 @@ function renderMetadataSuggestions(query) {
     option.textContent = name;
     option.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      metadataFilter.value = name;
-      applyMetadataFilter();
+      metadataTypeFilter.value = name;
+      applyFilters();
     });
-    metadataSuggestions.appendChild(option);
+    metadataTypeSuggestions.appendChild(option);
   });
 
-  metadataSuggestions.style.display = 'block';
+  metadataTypeSuggestions.style.display = 'block';
 }
 
 function updateClearButtonVisibility() {
-  if (clearFilterBtn && metadataFilter) {
-    if (metadataFilter.value.trim()) {
-      clearFilterBtn.classList.add('visible');
+  // Actualizar visibilidad del botón de limpiar para tipos de metadata
+  if (clearTypeFilterBtn && metadataTypeFilter) {
+    if (metadataTypeFilter.value.trim()) {
+      clearTypeFilterBtn.classList.add('visible');
     } else {
-      clearFilterBtn.classList.remove('visible');
+      clearTypeFilterBtn.classList.remove('visible');
+    }
+  }
+
+  // Actualizar visibilidad del botón de limpiar para componentes
+  if (clearComponentFilterBtn && componentFilter) {
+    if (componentFilter.value.trim()) {
+      clearComponentFilterBtn.classList.add('visible');
+    } else {
+      clearComponentFilterBtn.classList.remove('visible');
     }
   }
 }
 
-function clearFilter() {
-  if (metadataFilter) {
-    metadataFilter.value = '';
+function clearTypeFilter() {
+  if (metadataTypeFilter) {
+    metadataTypeFilter.value = '';
     updateClearButtonVisibility();
-    applyMetadataFilter();
+    applyFilters();
   }
 }
 
-function hideMetadataSuggestions() {
-  if (metadataSuggestions) {
-    metadataSuggestions.style.display = 'none';
+function clearComponentFilter() {
+  if (componentFilter) {
+    componentFilter.value = '';
+    updateClearButtonVisibility();
+    applyFilters();
   }
 }
 
-function applyMetadataFilter() {
-  if (treeView && metadataFilter) {
-    treeView.filterMetadataTypes(metadataFilter.value);
+function hideMetadataTypeSuggestions() {
+  if (metadataTypeSuggestions) {
+    metadataTypeSuggestions.style.display = 'none';
   }
-  hideMetadataSuggestions();
+}
+
+function applyFilters() {
+  if (treeView) {
+    const typeFilter = metadataTypeFilter?.value || '';
+    const componentFilterText = componentFilter?.value || '';
+    treeView.filterMetadataTypes(typeFilter, componentFilterText);
+  }
+  hideMetadataTypeSuggestions();
   updateClearButtonVisibility();
 }
 
@@ -632,11 +705,14 @@ function goBackToScreen1() {
   selectedOrgB = null;
   treeView = null;
 
-  // Limpiar el filtro
-  if (metadataFilter) {
-    metadataFilter.value = '';
-    updateClearButtonVisibility();
+  // Limpiar los filtros
+  if (metadataTypeFilter) {
+    metadataTypeFilter.value = '';
   }
+  if (componentFilter) {
+    componentFilter.value = '';
+  }
+  updateClearButtonVisibility();
 
   // Limpiar el treeview (preservar el filter-wrapper)
   const treeviewElement = document.getElementById('treeview');
@@ -673,37 +749,76 @@ refreshOrgsBtn.addEventListener('click', (e) => {
 });
 backBtn.addEventListener('click', goBackToScreen1);
 
-// Configurar el filtro de metadata types (solo aplica al pulsar Enter o seleccionar una opción)
-if (metadataFilter) {
-  metadataFilter.addEventListener('input', (e) => {
-    renderMetadataSuggestions(e.target.value);
+// Configurar el filtro de tipos de metadata (se aplica en tiempo real mientras escribes)
+if (metadataTypeFilter) {
+  metadataTypeFilter.addEventListener('input', (e) => {
+    renderMetadataTypeSuggestions(e.target.value);
+    // Aplicar el filtro en tiempo real mientras escribes
+    applyFilters();
   });
 
-  metadataFilter.addEventListener('focus', (e) => {
-    renderMetadataSuggestions(e.target.value);
+  metadataTypeFilter.addEventListener('focus', (e) => {
+    renderMetadataTypeSuggestions(e.target.value);
   });
 
-  metadataFilter.addEventListener('keydown', (e) => {
+  metadataTypeFilter.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      applyMetadataFilter();
+      applyFilters();
+    } else if (e.key === 'Escape') {
+      // Si estamos editando el input, limpiar el filtro con ESC
+      e.preventDefault();
+      clearTypeFilter();
+      metadataTypeFilter.focus();
     }
   });
 
-  metadataFilter.addEventListener('blur', () => {
+  metadataTypeFilter.addEventListener('blur', () => {
     // Pequeño delay para permitir clicks en las opciones
-    setTimeout(hideMetadataSuggestions, 150);
+    setTimeout(hideMetadataTypeSuggestions, 150);
   });
 }
 
-// Configurar botón de limpiar filtro
-if (clearFilterBtn) {
-  clearFilterBtn.addEventListener('click', (e) => {
+// Configurar el filtro de componentes (se aplica en tiempo real mientras escribes)
+if (componentFilter) {
+  componentFilter.addEventListener('input', (e) => {
+    // Aplicar el filtro en tiempo real mientras escribes
+    applyFilters();
+  });
+
+  componentFilter.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyFilters();
+    } else if (e.key === 'Escape') {
+      // Si estamos editando el input, limpiar el filtro con ESC
+      e.preventDefault();
+      clearComponentFilter();
+      componentFilter.focus();
+    }
+  });
+}
+
+// Configurar botón de limpiar filtro de tipos
+if (clearTypeFilterBtn) {
+  clearTypeFilterBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    clearFilter();
-    if (metadataFilter) {
-      metadataFilter.focus();
+    clearTypeFilter();
+    if (metadataTypeFilter) {
+      metadataTypeFilter.focus();
+    }
+  });
+}
+
+// Configurar botón de limpiar filtro de componentes
+if (clearComponentFilterBtn) {
+  clearComponentFilterBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearComponentFilter();
+    if (componentFilter) {
+      componentFilter.focus();
     }
   });
 }
