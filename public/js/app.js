@@ -894,15 +894,15 @@ if (closeDiffBtn) {
   });
 }
 
-// Configurar botó per amagar/mostrar la columna del treeview
+// Configurar botón para ocultar/mostrar la columna del treeview
 if (toggleTreeviewBtn && mainContent) {
   toggleTreeviewBtn.addEventListener('click', () => {
     const collapsed = mainContent.classList.toggle('treeview-collapsed');
     const icon = toggleTreeviewBtn.querySelector('i');
     if (collapsed) {
-      toggleTreeviewBtn.title = 'Mostrar columna de tipus';
+      toggleTreeviewBtn.title = 'Mostrar columna de tipos';
     } else {
-      toggleTreeviewBtn.title = 'Amagar columna de tipus';
+      toggleTreeviewBtn.title = 'Ocultar columna de tipos';
     }
     if (icon) {
       icon.className = collapsed ? 'fas fa-expand' : 'fas fa-columns';
@@ -910,7 +910,7 @@ if (toggleTreeviewBtn && mainContent) {
   });
 }
 
-// Obrir/ tancar modal de "Review changes"
+// Abrir / cerrar modal de "Revisar cambios"
 function openReviewChangesModal() {
   if (!reviewChangesModal || !reviewChangesContent) return;
 
@@ -920,7 +920,7 @@ function openReviewChangesModal() {
   );
 
   if (!markedElements.length) {
-    reviewChangesContent.innerHTML = '<p class="empty-message">Encara no hi ha cap component modificat o marcat per desplegar.</p>';
+    reviewChangesContent.innerHTML = '<p class="empty-message">Todavía no hay ningún componente modificado ni marcado para desplegar.</p>';
   } else {
     const items = [];
     markedElements.forEach((el) => {
@@ -956,9 +956,9 @@ function openReviewChangesModal() {
       const statusSpan = document.createElement('span');
       statusSpan.className = 'item-path';
       if (status === 'resolved') {
-        statusSpan.textContent = 'Contingut sincronitzat de Org A cap a Org B';
+        statusSpan.textContent = 'Contenido sincronizado de Org A hacia Org B';
       } else if (status === 'deploy-from-a') {
-        statusSpan.textContent = 'Marcat per desplegar (només existeix a Org A)';
+        statusSpan.textContent = 'Marcado para desplegar (solo existe en Org A)';
       }
       li.appendChild(badge);
       li.appendChild(nameSpan);

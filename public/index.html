@@ -106,13 +106,13 @@
     <div id="screen2" class="screen" style="display: none;">
         <div class="container">
             <div class="screen-header">
-                <button id="backBtn" class="btn-icon-back" title="Volver">
+                <button id="backBtn" class="btn-icon-back" title="Volver a la selección de orgs">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <h1>Metadata Types</h1>
+                <h1>Tipos de metadata</h1>
             </div>
             <div class="org-info">
-                <button id="toggleTreeviewBtn" class="btn-icon-toggle-treeview" title="Amagar columna de tipus">
+                <button id="toggleTreeviewBtn" class="btn-icon-toggle-treeview" title="Ocultar columna de tipos">
                     <i class="fas fa-columns"></i>
                 </button>
                 <div class="org-info-item">
@@ -128,7 +128,7 @@
                 </div>
                 <button id="reviewChangesBtn" class="btn-review-changes" type="button" disabled>
                     <i class="fas fa-list-check"></i>
-                    <span>Review changes</span>
+                    <span>Revisar cambios</span>
                 </button>
             </div>
             <div id="metadataTypesWarning" class="warning-message" style="display: none;"></div>
@@ -185,7 +185,7 @@
                     </div>
                     <div id="diffViewer" class="diff-viewer">
                         <div class="empty-message">
-                            Selecciona un component a la columna esquerra per veure aquí les diferències.
+                            Selecciona un componente en la columna izquierda para ver aquí las diferencias.
                         </div>
                     </div>
                 </div>
@@ -193,13 +193,13 @@
         </div>
     </div>
 
-    <!-- Modal per revisar canvis -->
+    <!-- Modal para revisar cambios -->
     <div id="reviewChangesModal" class="modal-overlay" style="display: none;">
         <div class="modal-backdrop"></div>
         <div class="modal-dialog">
             <div class="modal-header">
-                <h2>Review changes</h2>
-                <button id="closeReviewChangesBtn" class="btn-icon-close" type="button" title="Tancar">
+                <h2>Revisar cambios</h2>
+                <button id="closeReviewChangesBtn" class="btn-icon-close" type="button" title="Cerrar">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -210,10 +210,10 @@
             </div>
             <div class="modal-footer">
                 <button type="button" id="closeReviewChangesBtn" class="btn-modal-secondary">
-                    Close
+                    Cerrar
                 </button>
                 <button type="button" id="deployChangesBtn" class="btn-modal-primary">
-                    Deploy
+                    Desplegar
                 </button>
             </div>
         </div>

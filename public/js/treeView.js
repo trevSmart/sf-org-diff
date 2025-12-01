@@ -576,12 +576,12 @@ export class TreeView {
         parentNode.classList.add('node-has-selected-for-deploy');
       }
 
-      // Utilitzar la mateixa icona que per als modificats (★)
+      // Usar el mismo icono que para los modificados (★)
       symbolElement.textContent = '★';
       symbolElement.className = 'component-symbol symbol-org-a symbol-selected-for-deploy';
-      symbolElement.title = 'Marcat per desplegar de Org A cap a Org B';
+      symbolElement.title = 'Marcado para desplegar de Org A hacia Org B';
 
-      // Activar el botó de "Review changes" quan hi hagi almenys un component seleccionat
+      // Activar el botón de "Revisar cambios" cuando haya al menos un componente seleccionado
       const reviewBtn = document.getElementById('reviewChangesBtn');
       if (reviewBtn) {
         reviewBtn.disabled = false;
@@ -669,15 +669,15 @@ export class TreeView {
     }
 
     try {
-      // Només cal carregar el contingut d'Org A; Org B quedarà buit
+      // Solo es necesario cargar el contenido de Org A; Org B quedará vacío
       const dataA = await fetch(
         `/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`
       ).then(res => res.json());
 
       if (!dataA.success) {
-        const errorMsg = dataA.error || 'Error desconegut';
+        const errorMsg = dataA.error || 'Error desconocido';
         diffViewer.innerHTML = '';
-        diffViewer.appendChild(this.createErrorElement(`Error al carregar el contingut de Org A: ${errorMsg}`));
+        diffViewer.appendChild(this.createErrorElement(`Error al cargar el contenido de Org A: ${errorMsg}`));
         return;
       }
 
@@ -703,13 +703,8 @@ export class TreeView {
           deployBtn = document.createElement('button');
           deployBtn.type = 'button';
           deployBtn.className = 'btn-mark-deploy';
-          // Inserir el botó ABANS del nom de la org B
-          const labelTextB = diffLabelB.querySelector('.diff-label-text');
-          if (labelTextB) {
-            diffLabelB.insertBefore(deployBtn, labelTextB);
-          } else {
-            diffLabelB.appendChild(deployBtn);
-          }
+          // Inserir el botó al principi: abans de la icona i del nom de la org B
+          diffLabelB.insertBefore(deployBtn, diffLabelB.firstChild || null);
         }
 
         const updateButtonText = () => {
@@ -1220,7 +1215,7 @@ export class TreeView {
       childrenContainer.innerHTML = '';
       const errorLi = document.createElement('li');
       errorLi.className = 'error';
-      errorLi.textContent = 'Error carregant els fitxers del bundle';
+      errorLi.textContent = 'Error al cargar los archivos del bundle';
       childrenContainer.appendChild(errorLi);
     }
   }
@@ -1240,7 +1235,7 @@ export class TreeView {
     const dataB = await respB.json();
 
     if (!dataA.success || !dataB.success) {
-      throw new Error(dataA.error || dataB.error || 'Error carregant fitxers');
+      throw new Error(dataA.error || dataB.error || 'Error al cargar archivos');
     }
 
     const filesA = dataA.files || [];
@@ -1354,7 +1349,7 @@ export class TreeView {
       if (parentNode) {
         parentNode.classList.add('node-has-resolved');
       }
-      // Activar el botó de "Review changes" quan hi hagi almenys un element modificat
+      // Activar el botón de "Revisar cambios" cuando haya al menos un elemento modificado
       const reviewBtn = document.getElementById('reviewChangesBtn');
       if (reviewBtn) {
         reviewBtn.disabled = false;
@@ -1598,7 +1593,7 @@ export class TreeView {
         }
       }
     } else {
-      // Si hi ha ítems o està carregant, mostrar el recompte en format "0 / 3" amb colors
+      // Si hay ítems o está cargando, mostrar el recuento en formato "0 / 3" con colores
       countsElement.innerHTML = '';
 
       const countASpan = document.createElement('span');
