@@ -1,7 +1,7 @@
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
-import { join, relative } from 'path';
+import { join, relative, sep as pathSeparator } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -513,6 +513,14 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     }
   }
 
+  // For non-Apex metadata types, prefer Metadata API retrieve which is faster than project retrieve
+  try {
+    console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
+    return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
+  } catch (metadataError) {
+    console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+  }
+
   // Fall back to the traditional sf project retrieve method
   // This is used for bundles (with filePath) or unsupported metadata types
   return retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath);
@@ -593,6 +601,73 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
     if (errorMessage.includes('not found') || errorMessage.includes('does not exist')) {
       throw new Error(`Component ${componentName} not found in org ${orgAlias}`);
     }
+    throw error;
+  }
+}
+
+/**
+ * Retrieves component content using sf metadata retrieve (Metadata API)
+ * Mirrors the strategy used by Salesforce VS Code extensions for faster diffs
+ * than project retrieve for most metadata types (non-Apex).
+ * @param {string} metadataType - Type of metadata
+ * @param {string} componentName - Name of the component
+ * @param {string} orgAlias - Alias of the org
+ * @param {string} filePath - Optional bundle file path
+ * @returns {Promise<string>} - The content of the component
+ */
+async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath = null) {
+  await mkdir(TMP_DIR, { recursive: true });
+
+  const retrieveDir = join(TMP_DIR, `metadata_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+  const zipPath = join(retrieveDir, 'retrieve.zip');
+
+  try {
+    const retrieveCommand = [
+      'sf metadata retrieve start',
+      `--metadata "${metadataType}:${componentName}"`,
+      `--target-org "${orgAlias}"`,
+      `--zip-file "${zipPath}"`,
+      '--single-package',
+      '--wait 120'
+    ].join(' ');
+
+    console.log(`[SF CLI] Executing: ${retrieveCommand}`);
+    await execAsync(retrieveCommand, {
+      maxBuffer: 100 * 1024 * 1024,
+      timeout: 300000,
+      cwd: PROJECT_ROOT
+    });
+
+    const { stdout: zipList } = await execAsync(`unzip -l "${zipPath}"`, {
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 120000
+    });
+
+    const zipEntries = zipList
+      .split('\n')
+      .map(line => line.trim().split(/\s+/).pop())
+      .filter(entry => entry && entry.includes('/') && entry !== 'Archive:');
+
+    const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
+
+    if (!candidateEntry) {
+      throw new Error(`Could not locate ${metadataType}:${componentName} in retrieved zip file`);
+    }
+
+    const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
+      maxBuffer: 100 * 1024 * 1024,
+      timeout: 120000
+    });
+
+    await rm(retrieveDir, { recursive: true, force: true });
+    return content;
+  } catch (error) {
+    try {
+      await rm(retrieveDir, { recursive: true, force: true });
+    } catch (_cleanupError) {
+      // ignore cleanup issues
+    }
+
     throw error;
   }
 }
@@ -836,6 +911,45 @@ function getPossibleComponentPaths(baseDir, metadataType, componentName) {
   }
 
   return paths;
+}
+
+/**
+ * Converts platform-specific paths to posix (zip entries always use '/')
+ * @param {string} pathStr - Path to normalize
+ * @returns {string} - Posix-formatted path
+ */
+function toPosixPath(pathStr) {
+  return pathStr.split(pathSeparator).join('/');
+}
+
+/**
+ * Selects the best matching entry inside a retrieved zip file for a component
+ * @param {string[]} zipEntries - Array of zip entry paths
+ * @param {string} metadataType - Metadata type
+ * @param {string} componentName - Component name
+ * @param {string|null} filePath - Optional file path for bundles
+ * @returns {string|undefined} - Matching zip entry
+ */
+function selectZipEntry(zipEntries, metadataType, componentName, filePath) {
+  if (filePath) {
+    const normalizedFile = toPosixPath(filePath);
+    const directMatch = zipEntries.find(entry => entry.endsWith(normalizedFile) || entry.endsWith(`/${normalizedFile}`));
+    if (directMatch) {
+      return directMatch;
+    }
+  }
+
+  const relativeCandidates = getPossibleComponentPaths('unpackaged', metadataType, componentName)
+    .map(p => toPosixPath(relative('unpackaged', p)));
+
+  for (const candidate of relativeCandidates) {
+    const match = zipEntries.find(entry => entry.endsWith(candidate));
+    if (match) {
+      return match;
+    }
+  }
+
+  return zipEntries.find(entry => entry.toLowerCase().includes(componentName.toLowerCase()));
 }
 
 /**
