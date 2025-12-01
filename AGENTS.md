@@ -1,150 +1,150 @@
-# OrgDiff - Guía para Agentes IA
+# OrgDiff - Guide for AI Agents
 
-## Overview del Proyecto
+## Project Overview
 
-OrgDiff es una herramienta web desarrollada en Node.js + Express (backend) y Vanilla JavaScript (frontend) que permite comparar metadata entre dos orgs de Salesforce. La herramienta está diseñada para facilitar la gestión y sincronización de metadata entre diferentes orgs, típicamente entre sandboxes.
+OrgDiff is a web tool developed with Node.js + Express (backend) and Vanilla JavaScript (frontend) that allows comparing metadata between two Salesforce orgs. The tool is designed to facilitate the management and synchronization of metadata between different orgs, typically between sandboxes.
 
-### Propósito Principal
+### Main Purpose
 
-Permitir a los desarrolladores de Salesforce:
-- Comparar tipos de metadata y componentes entre dos orgs
-- Visualizar diferencias entre componentes específicos
-- Gestionar y resolver diferencias entre orgs
-- Realizar deploy de componentes desde una org a otra
-- Todo sin necesidad de cambiar la default org del CLI constantemente
+Enable Salesforce developers to:
+- Compare metadata types and components between two orgs
+- Visualize differences between specific components
+- Manage and resolve differences between orgs
+- Deploy components from one org to another
+- All without needing to constantly change the CLI default org
 
-## Arquitectura
+## Architecture
 
 ### Backend
-- **Node.js + Express**: Servidor web que expone APIs REST
-- **Salesforce CLI**: Todos los comandos se ejecutan a través de `sf` CLI (asume que está instalado y configurado)
-- **Módulo de servicios**: `src/services/salesforce.js` abstrae la ejecución de comandos CLI
+- **Node.js + Express**: Web server that exposes REST APIs
+- **Salesforce CLI**: All commands are executed through the `sf` CLI (assumes it's installed and configured)
+- **Service module**: `src/services/salesforce.js` abstracts CLI command execution
 
 ### Frontend
-- **Vanilla JavaScript**: Sin frameworks, JavaScript puro con módulos ES6
-- **Monaco Editor**: Para visualización de diffs de código (preparado para futuras fases)
-- **TreeView personalizado**: Implementación propia para mostrar metadata types y componentes
+- **Vanilla JavaScript**: No frameworks, pure JavaScript with ES6 modules
+- **Monaco Editor**: For code diff visualization (prepared for future phases)
+- **Custom TreeView**: Own implementation to display metadata types and components
 
-## Flujo de la Aplicación
+## Application Flow
 
-### Paso 1: Selección de Orgs
-1. La aplicación carga automáticamente la lista de orgs disponibles usando `sf org list --json`
-2. **Auto-selección de orgs de prueba**: Si existen las orgs "DEVSERVICE" y "Vodafone - dev11pro" en la lista, se seleccionan automáticamente:
-   - **DEVSERVICE** → seleccionada automáticamente en **Org A**
-   - **Vodafone - dev11pro** → seleccionada automáticamente en **Org B**
-3. El usuario puede modificar la selección si lo desea
-4. Al hacer click en "Continuar":
-   - Se valida que las orgs sean diferentes
-   - Se valida que ambas orgs sean accesibles usando `sf org display --target-org "<alias>" --json`
-   - Si alguna org no es accesible (expirada, sin permisos, etc.), se muestra un error
-   - Si ambas orgs son válidas, se pasa al siguiente paso
+### Step 1: Org Selection
+1. The application automatically loads the list of available orgs using `sf org list --json`
+2. **Auto-selection of test orgs**: If the orgs "DEVSERVICE" and "Vodafone - dev11pro" exist in the list, they are automatically selected:
+   - **DEVSERVICE** → automatically selected in **Org A**
+   - **Vodafone - dev11pro** → automatically selected in **Org B**
+3. The user can modify the selection if desired
+4. When clicking "Continue":
+   - Validates that the orgs are different
+   - Validates that both orgs are accessible using `sf org display --target-org "<alias>" --json`
+   - If any org is not accessible (expired, no permissions, etc.), an error is shown
+   - If both orgs are valid, proceed to the next step
 
-### Paso 2: Visualización de Metadata Types
-1. Se cargan los tipos de metadata para **ambas orgs** en paralelo usando `sf org list metadata-types --target-org "<alias>" --json`
-2. Se **comparan** los tipos de metadata entre las dos orgs:
-   - Si hay una diferencia significativa (más del 10% de diferencia), se muestra un **warning** indicando que algunos tipos de metadata pueden no estar visibles debido a permisos insuficientes o diferencias en la configuración
-   - El warning muestra qué org tiene más tipos y la diferencia porcentual
-3. Se renderiza un **treeview** con la **unión** de todos los tipos de metadata de ambas orgs (sin duplicados)
-4. Cada tipo de metadata aparece como un **nodo expandible** (carpeta)
-5. Al expandir un nodo (ej: ApexClass):
-   - Se muestra un indicador de carga
-   - Se hace una llamada a `/api/metadata/:orgAlias/:metadataType` que ejecuta `sf org list metadata --metadata-type <tipo> --target-org "<alias>" --json`
-   - Se renderizan los componentes como **nodos hoja** (hijos del tipo de metadata)
-   - Los componentes se cachean para evitar recargas innecesarias
+### Step 2: Metadata Types Visualization
+1. Metadata types are loaded for **both orgs** in parallel using `sf org list metadata-types --target-org "<alias>" --json`
+2. Metadata types are **compared** between the two orgs:
+   - If there's a significant difference (more than 10% difference), a **warning** is shown indicating that some metadata types may not be visible due to insufficient permissions or configuration differences
+   - The warning shows which org has more types and the percentage difference
+3. A **treeview** is rendered with the **union** of all metadata types from both orgs (no duplicates)
+4. Each metadata type appears as an **expandable node** (folder)
+5. When expanding a node (e.g., ApexClass):
+   - A loading indicator is shown
+   - A call is made to `/api/metadata/:orgAlias/:metadataType` which executes `sf org list metadata --metadata-type <type> --target-org "<alias>" --json`
+   - Components are rendered as **leaf nodes** (children of the metadata type)
+   - Components are cached to avoid unnecessary reloads
 
-### Paso 3: Comparación y Gestión (Futuras Fases)
-- Visualización de diferencias usando Monaco Editor diff viewer
-- Deploy de componentes desde una org a otra
-- Resolución de conflictos
-- Filtrado y búsqueda
+### Step 3: Comparison and Management (Future Phases)
+- Visualizing differences using Monaco Editor diff viewer
+- Deploying components from one org to another
+- Conflict resolution
+- Filtering and search
 
-## Estrategia de Rendimiento
+## Performance Strategy
 
-**CRÍTICO**: La herramienta está diseñada para ser eficiente y no requerir esperas largas:
+**CRITICAL**: The tool is designed to be efficient and not require long waits:
 
-1. **Listado inicial rápido**: Solo se listan los tipos de metadata (sin contenido)
-2. **Carga bajo demanda**: Los componentes se cargan solo cuando el usuario expande un tipo
-3. **Solo nombres**: Al expandir, solo se obtienen nombres y metadatos básicos, NO el contenido completo
-4. **Contenido completo**: El contenido completo se descarga solo cuando el usuario abre el diff de un componente específico
+1. **Fast initial listing**: Only metadata types are listed (without content)
+2. **On-demand loading**: Components are loaded only when the user expands a type
+3. **Names only**: When expanding, only names and basic metadata are obtained, NOT the complete content
+4. **Complete content**: Complete content is downloaded only when the user opens the diff of a specific component
 
-Esta estrategia evita tener que esperar horas descargando toda la metadata antes de poder trabajar.
+This strategy avoids having to wait hours downloading all metadata before being able to work.
 
-## Comandos Salesforce CLI Utilizados
+## Salesforce CLI Commands Used
 
 ### `sf org list --json`
-Lista todas las orgs autorizadas en el CLI. No requiere `--target-org`.
+Lists all orgs authorized in the CLI. Does not require `--target-org`.
 
 ### `sf org display --target-org "<alias>" --json`
-Valida que una org es accesible. Se usa para verificar que las orgs seleccionadas funcionan antes de continuar.
+Validates that an org is accessible. Used to verify that selected orgs work before continuing.
 
 ### `sf org list metadata-types --target-org "<alias>" --json`
-Obtiene todos los tipos de metadata disponibles en una org. **Crítico** porque devuelve todos los tipos, incluyendo los que puedan aparecer en futuras releases de Salesforce.
+Gets all metadata types available in an org. **Critical** because it returns all types, including those that may appear in future Salesforce releases.
 
-### `sf org list metadata --metadata-type <tipo> --target-org "<alias>" --json`
-Lista solo los nombres de componentes de un tipo específico (sin contenido completo). **Optimización crítica de rendimiento**.
+### `sf org list metadata --metadata-type <type> --target-org "<alias>" --json`
+Lists only component names of a specific type (without complete content). **Critical performance optimization**.
 
-## Uso de --target-org
+## Using --target-org
 
-**IMPORTANTE**: Todos los comandos que requieren una org específica usan `--target-org "<alias>"` (con comillas para manejar espacios). Esto permite:
-- Ejecutar comandos en diferentes orgs sin cambiar la default org del CLI
-- Evitar tener que cambiar y restaurar la configuración constantemente
-- Trabajar con múltiples orgs simultáneamente
+**IMPORTANT**: All commands that require a specific org use `--target-org "<alias>"` (with quotes to handle spaces). This allows:
+- Executing commands in different orgs without changing the CLI default org
+- Avoiding having to constantly change and restore configuration
+- Working with multiple orgs simultaneously
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 OrgDiff/
-├── package.json              # Dependencias y scripts
-├── server.js                 # Servidor Express
-├── README.md                 # Documentación general del proyecto
-├── AGENTS.md                 # Este archivo (guía para agentes IA)
-├── CONTEXT.md                # Documentación técnica detallada para agentes IA
-├── public/                   # Archivos estáticos del frontend
+├── package.json              # Dependencies and scripts
+├── server.js                 # Express server
+├── README.md                 # General project documentation
+├── AGENTS.md                 # This file (guide for AI agents)
+├── CONTEXT.md                # Detailed technical documentation for AI agents
+├── public/                   # Frontend static files
 │   ├── index.html
 │   ├── css/
 │   │   └── styles.css
 │   └── js/
-│       ├── app.js            # Lógica principal
-│       ├── treeView.js       # Módulo del treeview
-│       └── diffViewer.js    # Módulo de Monaco Editor (futuras fases)
-├── src/                      # Código del backend
+│       ├── app.js            # Main logic
+│       ├── treeView.js       # TreeView module
+│       └── diffViewer.js    # Monaco Editor module (future phases)
+├── src/                      # Backend code
 │   └── services/
-│       └── salesforce.js     # Servicio para ejecutar comandos CLI
-└── tmp/                      # Archivos temporales (scripts, diagramas, imágenes, markdown extensos)
+│       └── salesforce.js     # Service to execute CLI commands
+└── tmp/                      # Temporary files (scripts, diagrams, images, extensive markdown)
 ```
 
-## Reglas Críticas para Agentes IA
+## Critical Rules for AI Agents
 
-### ⚠️ Archivos Temporales - REGLA ABSOLUTA
+### ⚠️ Temporary Files - ABSOLUTE RULE
 
-**CUALQUIER archivo temporal DEBE crearse SIEMPRE en la carpeta `tmp/`**
+**ANY temporary file MUST ALWAYS be created in the `tmp/` folder**
 
-Esto incluye:
-- Scripts temporales
-- Diagramas generados
-- Imágenes creadas
-- Archivos Markdown extensos para guardar información
-- Cualquier archivo que no sea parte del código fuente permanente
+This includes:
+- Temporary scripts
+- Generated diagrams
+- Created images
+- Extensive Markdown files to save information
+- Any file that is not part of the permanent source code
 
-**NO crear archivos temporales fuera de `tmp/`**. Esto evita desparramar archivos por todo el proyecto.
+**DO NOT create temporary files outside of `tmp/`**. This avoids scattering files throughout the project.
 
-### Convenciones de Código
-- Código en inglés (nombres de variables, funciones, clases)
-- Comentarios en inglés
-- Uso de camelCase para nombres
-- Módulos ES6 (import/export)
+### Code Conventions
+- Code in English (variable names, functions, classes)
+- Comments in English
+- Use camelCase for names
+- ES6 modules (import/export)
 
-### Preferencias de Herramientas
-- **Siempre preferir herramientas MCP sobre comandos CLI directos** cuando sea posible
-- Por ejemplo: usar `executeQuery` del servidor MCP de Salesforce en lugar de `sf data query`
-- Usar herramientas MCP de Github en lugar de comandos git directos
+### Tool Preferences
+- **Always prefer MCP tools over direct CLI commands** when possible
+- For example: use `executeQuery` from the Salesforce MCP server instead of `sf data query`
+- Use Github MCP tools instead of direct git commands
 
-## Endpoints de la API
+## API Endpoints
 
 ### `GET /api/orgs`
-Obtiene la lista de orgs autorizadas en el CLI.
+Gets the list of orgs authorized in the CLI.
 
-**Respuesta**:
+**Response**:
 ```json
 {
   "success": true,
@@ -161,9 +161,9 @@ Obtiene la lista de orgs autorizadas en el CLI.
 ```
 
 ### `GET /api/orgs/validate/:orgAlias`
-Valida que una org es accesible y no está expirada.
+Validates that an org is accessible and not expired.
 
-**Respuesta**:
+**Response**:
 ```json
 {
   "success": true,
@@ -177,9 +177,9 @@ Valida que una org es accesible y no está expirada.
 ```
 
 ### `GET /api/metadata-types/:orgAlias`
-Obtiene los tipos de metadata disponibles en una org.
+Gets the metadata types available in an org.
 
-**Respuesta**:
+**Response**:
 ```json
 {
   "success": true,
@@ -193,9 +193,9 @@ Obtiene los tipos de metadata disponibles en una org.
 ```
 
 ### `GET /api/metadata/:orgAlias/:metadataType`
-Obtiene la lista de componentes de un tipo de metadata específico (solo nombres, sin contenido).
+Gets the list of components of a specific metadata type (names only, without content).
 
-**Respuesta**:
+**Response**:
 ```json
 {
   "success": true,
@@ -208,93 +208,93 @@ Obtiene la lista de componentes de un tipo de metadata específico (solo nombres
 }
 ```
 
-## Instalación y Ejecución
+## Installation and Execution
 
 ```bash
-# Instalar dependencias
+# Install dependencies
 npm install
 
-# Ejecutar en modo desarrollo (con watch)
+# Run in development mode (with watch)
 npm run dev
 
-# Ejecutar en producción
+# Run in production
 npm start
 ```
 
-El servidor se ejecuta en `http://localhost:3200` por defecto.
+The server runs on `http://localhost:3200` by default.
 
-## Estado Actual del Proyecto
+## Current Project Status
 
-### ✅ Implementado
-- Selección de orgs con validación
-- **Auto-selección de orgs de prueba** (DEVSERVICE y Vodafone - dev11pro)
-- Validación de acceso a orgs
-- TreeView de metadata types
-- **Comparación de tipos de metadata entre orgs con warning** si hay diferencias significativas (indica posibles tipos ocultos por permisos)
-- Carga bajo demanda de componentes
-- Optimización de rendimiento (solo nombres, no contenido)
-- Cache de orgs en localStorage para carga rápida inicial
+### ✅ Implemented
+- Org selection with validation
+- **Auto-selection of test orgs** (DEVSERVICE and Vodafone - dev11pro)
+- Org access validation
+- Metadata types TreeView
+- **Metadata types comparison between orgs with warning** if there are significant differences (indicates possible types hidden by permissions)
+- On-demand component loading
+- Performance optimization (names only, not content)
+- Org cache in localStorage for fast initial load
 
-### 🚧 Futuras Fases
-- Comparación visual de componentes usando Monaco Editor diff viewer
-- Deploy de componentes desde una org a otra
-- Resolución de conflictos
-- Filtrado y búsqueda de metadata types y componentes
-- Exportación de diferencias
+### 🚧 Future Phases
+- Visual component comparison using Monaco Editor diff viewer
+- Component deployment from one org to another
+- Conflict resolution
+- Filtering and search of metadata types and components
+- Difference export
 
-## Funcionalidades Recientes Añadidas
+## Recently Added Features
 
-### Auto-selección de Orgs de Prueba
-Para acelerar las pruebas durante el desarrollo, la aplicación ahora selecciona automáticamente las siguientes orgs si están disponibles en la lista:
-- **DEVSERVICE** → seleccionada automáticamente en **Org A**
-- **Vodafone - dev11pro** → seleccionada automáticamente en **Org B**
+### Auto-selection of Test Orgs
+To speed up testing during development, the application now automatically selects the following orgs if they are available in the list:
+- **DEVSERVICE** → automatically selected in **Org A**
+- **Vodafone - dev11pro** → automatically selected in **Org B**
 
-Esta funcionalidad está implementada en la función `populateOrgSelects()` del archivo `public/js/app.js`. La selección automática ocurre después de poblar los desplegables, y el usuario puede modificar la selección si lo desea.
+This functionality is implemented in the `populateOrgSelects()` function in the `public/js/app.js` file. Automatic selection occurs after populating the dropdowns, and the user can modify the selection if desired.
 
-### Detección de Tipos de Metadata Ocultos por Permisos
-La aplicación ahora compara automáticamente el número de tipos de metadata entre las dos orgs seleccionadas. Si detecta una diferencia significativa (más del 10% de diferencia), muestra un warning indicando que algunos tipos de metadata pueden no estar visibles debido a permisos insuficientes o diferencias en la configuración de las orgs.
+### Detection of Metadata Types Hidden by Permissions
+The application now automatically compares the number of metadata types between the two selected orgs. If it detects a significant difference (more than 10% difference), it shows a warning indicating that some metadata types may not be visible due to insufficient permissions or configuration differences between the orgs.
 
-**Implementación:**
-- Se cargan los tipos de metadata de ambas orgs en paralelo
-- Se compara el número de tipos retornados
-- Si la diferencia es mayor al 10%, se muestra un warning con detalles
-- El treeview muestra la unión de todos los tipos de metadata de ambas orgs (sin duplicados)
+**Implementation:**
+- Metadata types from both orgs are loaded in parallel
+- The number of returned types is compared
+- If the difference is greater than 10%, a warning with details is shown
+- The treeview shows the union of all metadata types from both orgs (no duplicates)
 
-Esta funcionalidad está implementada en la función `checkMetadataTypesDifference()` del archivo `public/js/app.js`.
+This functionality is implemented in the `checkMetadataTypesDifference()` function in the `public/js/app.js` file.
 
-## Dependencias
+## Dependencies
 
-- **express**: Framework web para el servidor
-- **monaco-editor**: Editor de código de VS Code con soporte para diff viewer
+- **express**: Web framework for the server
+- **monaco-editor**: VS Code code editor with diff viewer support
 
-## Requisitos Previos
+## Prerequisites
 
-- Node.js instalado
-- Salesforce CLI (`sf`) instalado y configurado
-- Al menos dos orgs autorizadas en el CLI
+- Node.js installed
+- Salesforce CLI (`sf`) installed and configured
+- At least two orgs authorized in the CLI
 
-## Notas para Desarrolladores
+## Notes for Developers
 
-- El proyecto asume que Salesforce CLI está instalado y configurado
-- Todas las operaciones usan `--target-org` para no cambiar la default org
-- La estrategia de rendimiento es crítica: solo cargar lo necesario cuando sea necesario
-- El treeview cachea componentes cargados para evitar recargas innecesarias
-- Las orgs se cachean en localStorage para una carga inicial más rápida
-- La auto-selección de orgs de prueba facilita el desarrollo y testing
+- The project assumes Salesforce CLI is installed and configured
+- All operations use `--target-org` to avoid changing the default org
+- Performance strategy is critical: only load what's necessary when necessary
+- The treeview caches loaded components to avoid unnecessary reloads
+- Orgs are cached in localStorage for faster initial load
+- Auto-selection of test orgs facilitates development and testing
 
-## Manejo de Errores
+## Error Handling
 
-Todos los endpoints devuelven respuestas JSON consistentes:
-- `success: true` cuando la operación es exitosa
-- `success: false` cuando hay un error, junto con un mensaje descriptivo
+All endpoints return consistent JSON responses:
+- `success: true` when the operation is successful
+- `success: false` when there's an error, along with a descriptive message
 
-Los errores del frontend se muestran en un elemento `errorMessage` que se oculta automáticamente después de 5 segundos.
+Frontend errors are shown in an `errorMessage` element that automatically hides after 5 seconds.
 
-## Consideraciones de Rendimiento
+## Performance Considerations
 
-1. **No descargar todo el contenido de una vez**: Solo se descargan nombres de componentes cuando se expande un tipo
-2. **Cache de componentes**: Los componentes ya cargados se mantienen en memoria para evitar recargas
-3. **Cache de orgs**: La lista de orgs se guarda en localStorage para carga rápida inicial
-4. **Validación paralela**: Las validaciones de orgs se hacen en paralelo usando `Promise.all()`
+1. **Don't download all content at once**: Only component names are downloaded when a type is expanded
+2. **Component cache**: Already loaded components are kept in memory to avoid reloads
+3. **Org cache**: The org list is saved in localStorage for fast initial load
+4. **Parallel validation**: Org validations are done in parallel using `Promise.all()`
 
 
