@@ -40,6 +40,29 @@ const TOOLING_API_TYPES = {
 };
 
 /**
+ * Regex pattern for validating Salesforce metadata type and component names.
+ * Allows alphanumeric characters, underscores, hyphens, dots, and colons (for namespaced components).
+ * Examples: ApexClass, My_Component, namespace__Component, lwc-component
+ */
+const SAFE_IDENTIFIER_PATTERN = /^[\w.\-:]+$/;
+
+/**
+ * Validates that a parameter value is safe for shell command usage.
+ * Prevents command injection by ensuring values contain only safe characters.
+ * @param {string} value - The value to validate
+ * @param {string} paramName - Name of the parameter (for error messages)
+ * @throws {Error} If the value contains unsafe characters
+ */
+function validateShellSafeIdentifier(value, paramName) {
+  if (!value || typeof value !== 'string') {
+    throw new Error(`${paramName} is required and must be a string`);
+  }
+  if (!SAFE_IDENTIFIER_PATTERN.test(value)) {
+    throw new Error(`${paramName} contains invalid characters. Only alphanumeric characters, underscores, hyphens, dots, and colons are allowed.`);
+  }
+}
+
+/**
  * Ejecuta un comando de Salesforce CLI
  * @param {string} command - Comando CLI a ejecutar (sin --target-org)
  * @param {string|null} orgAlias - Alias de la org (opcional). Si se proporciona, añade --target-org
@@ -48,8 +71,9 @@ const TOOLING_API_TYPES = {
 export async function runCliCommand(command, orgAlias = null) {
   let fullCommand = command;
 
-  // Si se proporciona orgAlias, añadir --target-org con comillas para manejar espacios
+  // Si se proporciona orgAlias, validar y añadir --target-org con comillas para manejar espacios
   if (orgAlias) {
+    validateShellSafeIdentifier(orgAlias, 'orgAlias');
     fullCommand = `${command} --target-org "${orgAlias}"`;
   }
 
@@ -404,6 +428,10 @@ function isThirdPartyComponent(component) {
  * @returns {Promise<Array>} - Array de componentes con metadatos básicos (sin componentes de terceros)
  */
 export async function listMetadataComponents(metadataType, orgAlias) {
+  // Validate inputs to prevent command injection
+  validateShellSafeIdentifier(metadataType, 'metadataType');
+  validateShellSafeIdentifier(orgAlias, 'orgAlias');
+
   try {
     // For ApexClass, use Tooling API for faster listing with proper filters
     if (metadataType === 'ApexClass') {
@@ -536,6 +564,11 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
  * @returns {Promise<string>} - The content of the component
  */
 async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath = null) {
+  // Validate inputs to prevent command injection
+  validateShellSafeIdentifier(metadataType, 'metadataType');
+  validateShellSafeIdentifier(componentName, 'componentName');
+  validateShellSafeIdentifier(orgAlias, 'orgAlias');
+
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
@@ -546,15 +579,23 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
   const retrieveDir = join(TMP_DIR, `retrieve_${Date.now()}_${Math.random().toString(36).substring(7)}`);
 
   try {
-    // Usar sf project retrieve para obtener el componente en un directorio temporal
-    // El flag correcto es --output-dir, no --target-dir
-    const retrieveCommand = `sf project retrieve start --metadata ${metadataType}:${componentName} --output-dir "${retrieveDir}" --target-org "${orgAlias}"`;
-    const fullCommand = retrieveCommand;
+    // Use execFileAsync with argument array to prevent command injection
+    const args = [
+      'project',
+      'retrieve',
+      'start',
+      '--metadata',
+      `${metadataType}:${componentName}`,
+      '--output-dir',
+      retrieveDir,
+      '--target-org',
+      orgAlias
+    ];
 
     // Log the CLI command being executed
-    console.log(`[SF CLI] Executing: ${fullCommand}`);
+    console.log(`[SF CLI] Executing: sf ${args.join(' ')}`);
 
-    await execAsync(fullCommand, {
+    await execFileAsync('sf', args, {
       maxBuffer: 100 * 1024 * 1024, // 100MB
       timeout: 300000, // 5 minutos
       cwd: PROJECT_ROOT
@@ -616,29 +657,42 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
  * @returns {Promise<string>} - The content of the component
  */
 async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath = null) {
+  // Validate inputs to prevent command injection
+  validateShellSafeIdentifier(metadataType, 'metadataType');
+  validateShellSafeIdentifier(componentName, 'componentName');
+  validateShellSafeIdentifier(orgAlias, 'orgAlias');
+
   await mkdir(TMP_DIR, { recursive: true });
 
   const retrieveDir = join(TMP_DIR, `metadata_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const zipPath = join(retrieveDir, 'retrieve.zip');
 
   try {
-    const retrieveCommand = [
-      'sf metadata retrieve start',
-      `--metadata "${metadataType}:${componentName}"`,
-      `--target-org "${orgAlias}"`,
-      `--zip-file "${zipPath}"`,
+    // Use execFileAsync with argument array to prevent command injection
+    const args = [
+      'metadata',
+      'retrieve',
+      'start',
+      '--metadata',
+      `${metadataType}:${componentName}`,
+      '--target-org',
+      orgAlias,
+      '--zip-file',
+      zipPath,
       '--single-package',
-      '--wait 120'
-    ].join(' ');
+      '--wait',
+      '120'
+    ];
 
-    console.log(`[SF CLI] Executing: ${retrieveCommand}`);
-    await execAsync(retrieveCommand, {
+    console.log(`[SF CLI] Executing: sf ${args.join(' ')}`);
+    await execFileAsync('sf', args, {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 300000,
       cwd: PROJECT_ROOT
     });
 
-    const { stdout: zipList } = await execAsync(`unzip -l "${zipPath}"`, {
+    // Use execFileAsync for unzip commands as well
+    const { stdout: zipList } = await execFileAsync('unzip', ['-l', zipPath], {
       maxBuffer: 10 * 1024 * 1024,
       timeout: 120000
     });
@@ -657,7 +711,8 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       );
     }
 
-    const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
+    // Use execFileAsync for unzip content extraction
+    const { stdout: content } = await execFileAsync('unzip', ['-p', zipPath, candidateEntry], {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 120000
     });
@@ -745,6 +800,11 @@ async function findComponentFolder(baseDir, componentName) {
  * @returns {Promise<Array<string>>}
  */
 export async function listBundleFiles(metadataType, componentName, orgAlias) {
+  // Validate inputs to prevent command injection
+  validateShellSafeIdentifier(metadataType, 'metadataType');
+  validateShellSafeIdentifier(componentName, 'componentName');
+  validateShellSafeIdentifier(orgAlias, 'orgAlias');
+
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
