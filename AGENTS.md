@@ -271,7 +271,7 @@ Set the following environment variables (e.g., in a `.env` file):
 source .env
 
 # Get OAuth token for ACA
-response=$(curl -s -X POST "https://test.salesforce.com/services/oauth2/token" \
+response=$(curl -s -X POST "https://login.salesforce.com/services/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=$ACA_SF_ORG_CLIENT_ID" \
@@ -291,7 +291,7 @@ sf org login access-token --instance-url $SF_INSTANCE_URL --no-prompt --alias AC
 source .env
 
 # Get OAuth token for ALMIRALL
-response=$(curl -s -X POST "https://test.salesforce.com/services/oauth2/token" \
+response=$(curl -s -X POST "https://login.salesforce.com/services/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=$ALMIRALL_SF_ORG_CLIENT_ID" \
