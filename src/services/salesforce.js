@@ -657,10 +657,14 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       );
     }
 
-    const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
-      maxBuffer: 100 * 1024 * 1024,
-      timeout: 120000
-    });
+    const { stdout: content } = await execFileAsync(
+      'unzip',
+      ['-p', zipPath, candidateEntry],
+      {
+        maxBuffer: 100 * 1024 * 1024,
+        timeout: 120000
+      }
+    );
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
