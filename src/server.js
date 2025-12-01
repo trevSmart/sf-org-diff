@@ -190,7 +190,7 @@ app.get('/api/bundle-files/:orgAlias/:metadataType/:componentName', async (req, 
 });
 
 // Manejar rutas no encontradas para API
-app.use('/api/*', (req, res) => {
+app.use('/api/*path', (req, res) => {
   res.status(404).json({
     success: false,
     error: 'API endpoint not found'
