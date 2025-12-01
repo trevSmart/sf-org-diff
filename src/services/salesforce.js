@@ -49,13 +49,18 @@ const SAFE_IDENTIFIER_PATTERN = /^[\w.\-:]+$/;
 /**
  * Validates that a parameter value is safe for shell command usage.
  * Prevents command injection by ensuring values contain only safe characters.
+ * Also checks for path traversal patterns.
  * @param {string} value - The value to validate
  * @param {string} paramName - Name of the parameter (for error messages)
- * @throws {Error} If the value contains unsafe characters
+ * @throws {Error} If the value contains unsafe characters or path traversal patterns
  */
 function validateShellSafeIdentifier(value, paramName) {
   if (!value || typeof value !== 'string') {
     throw new Error(`${paramName} is required and must be a string`);
+  }
+  // Check for path traversal patterns
+  if (value.includes('..')) {
+    throw new Error(`${paramName} contains path traversal sequence`);
   }
   if (!SAFE_IDENTIFIER_PATTERN.test(value)) {
     throw new Error(`${paramName} contains invalid characters. Only alphanumeric characters, underscores, hyphens, dots, and colons are allowed.`);
