@@ -4,6 +4,9 @@
   "description": "Herramienta web para comparar metadata entre dos orgs de Salesforce",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "prestart": "node scripts/kill-existing.js",
     "start": "node src/server.js",

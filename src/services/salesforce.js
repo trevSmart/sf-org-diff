@@ -12,6 +12,10 @@ const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '../../');
 const TMP_DIR = join(PROJECT_ROOT, 'tmp');
 
+// Salesforce API version used for Tooling API requests
+// Update this when newer API features are needed
+const SF_API_VERSION = 'v61.0';
+
 /**
  * Mapping of metadata types to their Tooling API object names and body field
  * These types support fast content retrieval via Tooling API instead of using sf project retrieve
@@ -152,8 +156,21 @@ async function getOrgConnection(orgAlias) {
 }
 
 /**
+ * Escapes a string for use in a SOQL query to prevent injection attacks
+ * @param {string} value - The value to escape
+ * @returns {string} - The escaped value safe for SOQL
+ */
+function escapeSoql(value) {
+  if (!value) return '';
+  // Escape single quotes by doubling them (SOQL standard)
+  // Also escape backslashes which could be used for escaping
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
  * Queries the Salesforce Tooling API to retrieve component content directly
  * This is much faster than using sf project retrieve as it doesn't create temp directories
+ * Note: Uses native fetch which requires Node.js 18+
  * @param {string} orgAlias - Alias of the org
  * @param {string} objectName - Tooling API object name (e.g., 'ApexClass', 'ApexTrigger')
  * @param {string} componentName - Name of the component to retrieve
@@ -163,12 +180,15 @@ async function getOrgConnection(orgAlias) {
 async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
   const { accessToken, instanceUrl } = await getOrgConnection(orgAlias);
 
+  // Escape the component name to prevent SOQL injection
+  const escapedComponentName = escapeSoql(componentName);
+
   // Build the SOQL query to get the component body
-  const query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${componentName}'`;
+  const query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${escapedComponentName}'`;
   const encodedQuery = encodeURIComponent(query);
 
   // Make the Tooling API request using the access token
-  const apiUrl = `${instanceUrl}/services/data/v61.0/tooling/query/?q=${encodedQuery}`;
+  const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
 
   const response = await fetch(apiUrl, {
     method: 'GET',
