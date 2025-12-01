@@ -78,15 +78,15 @@ export class CodeMirrorDiffEditor extends BaseDiffEditor {
   scrollToFirstDifference() {
     if (!this.view) return;
     
-    // Get the chunks from the merge view
+    // Get the chunks from the merge view (may not exist if no differences)
     const chunks = this.view.chunks;
-    if (!chunks || chunks.length === 0) return;
+    if (!chunks || !Array.isArray(chunks) || chunks.length === 0) return;
     
     // Get the first chunk and scroll to it in editor B
     const firstChunk = chunks[0];
     const editorB = this.view.b;
     
-    if (editorB && firstChunk) {
+    if (editorB && firstChunk && typeof firstChunk.fromB === 'number') {
       // Scroll to the start of the first change in editor B
       const pos = firstChunk.fromB;
       editorB.dispatch({
