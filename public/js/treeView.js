@@ -49,6 +49,7 @@ export class TreeView {
     this.bundleFilesCache = new Map(); // Cache de archivos por componente bundle
     this.currentTypeFilter = ''; // Filtro actual de tipos aplicado
     this.currentComponentFilter = ''; // Filtro actual de componentes aplicado
+    this.comparisonProcesses = new Map(); // Procesos de comparación en curso por metadata type
   }
 
   getBundleTypes() {
@@ -152,8 +153,33 @@ export class TreeView {
     const label = document.createElement('span');
     label.className = 'node-label';
     const metadataTypeName = metadataType.xmlName || metadataType.directoryName;
-    // Inicialmente no mostrar conteos, se cargarán cuando se expanda el nodo
-    label.innerHTML = `<span class="node-name">${metadataTypeName}</span> <span class="node-counts" data-metadata-type="${metadataType.xmlName}" style="display: none;"></span>`;
+
+    // Crear el nombre del nodo
+    const nodeNameSpan = document.createElement('span');
+    nodeNameSpan.className = 'node-name';
+    nodeNameSpan.textContent = metadataTypeName;
+
+    // Crear botón de comparación (se mostrará cuando haya componentes desconocidos)
+    const compareButton = document.createElement('button');
+    compareButton.className = 'compare-all-btn';
+    compareButton.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    compareButton.title = 'Comparar tots els components desconeguts';
+    compareButton.style.display = 'none'; // Ocultar inicialmente, se mostrará cuando haya componentes
+    compareButton.addEventListener('click', (e) => {
+      e.stopPropagation(); // Evitar que se expanda/colapse el nodo
+      this.compareAllUnknownComponents(metadataTypeName);
+    });
+
+    // Crear el contenedor de conteos
+    const countsSpan = document.createElement('span');
+    countsSpan.className = 'node-counts';
+    countsSpan.setAttribute('data-metadata-type', metadataType.xmlName);
+    countsSpan.style.display = 'none'; // Inicialmente no mostrar conteos, se cargarán cuando se expanda el nodo
+
+    // Construir el label: nombre, botón, conteos
+    label.appendChild(nodeNameSpan);
+    label.appendChild(compareButton);
+    label.appendChild(countsSpan);
 
     nodeContent.appendChild(expandIcon);
     nodeContent.appendChild(folderIcon);
@@ -212,6 +238,9 @@ export class TreeView {
         this.renderComponents(childrenContainer, this.loadedComponents.get(metadataTypeName), metadataTypeName);
         childrenContainer.style.display = 'block';
 
+        // Mostrar el botón de comparación si hay componentes desconocidos
+        this.updateCompareButtonVisibility(metadataTypeName);
+
         // Reaplicar los filtros si hay alguno activo
         if (this.currentTypeFilter || this.currentComponentFilter) {
           this.filterMetadataTypes(this.currentTypeFilter, this.currentComponentFilter);
@@ -263,6 +292,9 @@ export class TreeView {
               // Renderizar componentes (pasar metadataTypeName para las comparaciones)
               this.renderComponents(childrenContainer, unionComponents, metadataTypeName);
 
+              // Mostrar el botón de comparación si hay componentes desconocidos
+              this.updateCompareButtonVisibility(metadataTypeName);
+
               // Reaplicar los filtros si hay alguno activo
               if (this.currentTypeFilter || this.currentComponentFilter) {
                 this.filterMetadataTypes(this.currentTypeFilter, this.currentComponentFilter);
@@ -313,7 +345,7 @@ export class TreeView {
       if (key) {
         const orgBComponent = orgBMap.get(key);
         const inBothOrgs = !!orgBComponent;
-        
+
         // Check for differences using lengthWithoutComments (for ApexClass and ApexTrigger)
         let hasDifferences = false;
         if (inBothOrgs && component.lengthWithoutComments !== undefined && orgBComponent.lengthWithoutComments !== undefined) {
@@ -487,6 +519,18 @@ export class TreeView {
 
       container.appendChild(li);
     });
+
+    // Actualizar visibilidad del botón de comparación después de renderizar todos los componentes
+    const parentNode = container.closest('.tree-node');
+    if (parentNode) {
+      const metadataTypeNameFromNode = parentNode.dataset.metadataType;
+      if (metadataTypeNameFromNode) {
+        // Usar setTimeout para asegurar que el DOM está completamente actualizado
+        setTimeout(() => {
+          this.updateCompareButtonVisibility(metadataTypeNameFromNode);
+        }, 0);
+      }
+    }
   }
 
   // NOTA: Las funciones de comparación automática (queueComparison, processComparisonQueue,
@@ -497,7 +541,7 @@ export class TreeView {
 
   /**
    * Compara un componente entre ambas orgs de forma asíncrona y actualiza el símbolo
-   * Solo se usa cuando no tenemos los metadatos completos en cache
+   * Compara el contenido real del componente (igual que el diff viewer) para obtener resultados precisos
    * @param {Object} component - Componente a comparar
    * @param {string} metadataTypeName - Nombre del tipo de metadata
    * @param {HTMLElement} symbolElement - Elemento del símbolo a actualizar
@@ -506,16 +550,19 @@ export class TreeView {
     const componentName = component.fullName || component.name || component.fileName;
 
     try {
-      const response = await fetch(
-        `/api/compare/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`
-      );
+      // Obtener contenido real de ambas orgs en paralelo (igual que el diff viewer)
+      const [dataA, dataB] = await Promise.all([
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`).then(res => res.json()),
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`).then(res => res.json())
+      ]);
 
-      const data = await response.json();
+      if (dataA.success && dataB.success) {
+        // Comparar el contenido real (igual que en openDiffViewer)
+        const areEqual = dataA.content === dataB.content;
 
-      if (data.success) {
         // Actualizar el símbolo según el resultado de la comparación
-        if (data.areEqual) {
-          symbolElement.textContent = '✓';
+        if (areEqual) {
+          symbolElement.textContent = '=';
           symbolElement.className = 'component-symbol symbol-both symbol-equal';
           symbolElement.title = 'Igual en ambas orgs';
         } else {
@@ -525,9 +572,10 @@ export class TreeView {
         }
       } else {
         // Si hay error, mostrar error
+        const errorMsg = dataA.error || dataB.error || 'Error desconocido';
         symbolElement.textContent = '?';
         symbolElement.className = 'component-symbol symbol-both symbol-error';
-        symbolElement.title = `Error al comparar: ${data.error || 'Error desconocido'}`;
+        symbolElement.title = `Error al comparar: ${errorMsg}`;
       }
     } catch (error) {
       console.error(`Error comparing component ${componentName}:`, error);
@@ -535,6 +583,136 @@ export class TreeView {
       symbolElement.className = 'component-symbol symbol-both symbol-error';
       symbolElement.title = 'Error al comparar';
     }
+  }
+
+  /**
+   * Compara todos los componentes desconocidos de un tipo de metadata
+   * @param {string} metadataTypeName - Nombre del tipo de metadata
+   */
+  async compareAllUnknownComponents(metadataTypeName) {
+    // Buscar el botón de comparación para este tipo
+    const node = this.container.querySelector(`.tree-node[data-metadata-type="${metadataTypeName}"]`);
+    if (!node) return;
+
+    const compareButton = node.querySelector('.compare-all-btn');
+    if (!compareButton) return;
+
+    // Si ya hay un proceso en curso, cancelarlo
+    const existingProcess = this.comparisonProcesses.get(metadataTypeName);
+    if (existingProcess && existingProcess.active) {
+      existingProcess.cancelled = true;
+      existingProcess.active = false;
+      // Restaurar el botón inmediatamente
+      compareButton.disabled = false;
+      compareButton.classList.remove('comparing');
+      compareButton.innerHTML = '<i class="fas fa-sync-alt"></i>';
+      compareButton.title = 'Comparar tots els components desconeguts';
+      this.comparisonProcesses.delete(metadataTypeName);
+      return;
+    }
+
+    // Crear nuevo proceso de comparación
+    const process = {
+      cancelled: false,
+      active: true
+    };
+    this.comparisonProcesses.set(metadataTypeName, process);
+
+    // Actualizar el botón para mostrar que está comparando
+    compareButton.disabled = false; // Mantener habilitado para poder cancelar
+    compareButton.classList.add('comparing');
+    const originalIcon = compareButton.innerHTML;
+    compareButton.innerHTML = '<i class="fas fa-stop"></i>';
+    compareButton.title = 'Aturar comparació (clic per aturar)';
+
+    // Obtener todos los componentes de este tipo
+    const childrenContainer = node.querySelector('.tree-children');
+    if (!childrenContainer) {
+      compareButton.disabled = false;
+      compareButton.classList.remove('comparing');
+      compareButton.innerHTML = originalIcon;
+      compareButton.title = 'Comparar tots els components desconeguts';
+      this.comparisonProcesses.delete(metadataTypeName);
+      return;
+    }
+
+    // Buscar todos los componentes con símbolo desconocido (que estén en ambas orgs)
+    // IMPORTANTE: Solo buscar los que aún están en estado desconocido
+    const components = childrenContainer.querySelectorAll('.tree-leaf, .bundle-node');
+    const unknownComponents = [];
+
+    components.forEach(componentLi => {
+      const symbol = componentLi.querySelector('.component-symbol');
+      if (symbol && symbol.classList.contains('symbol-unknown')) {
+        const componentName = componentLi.querySelector('.component-name')?.textContent;
+        if (componentName) {
+          unknownComponents.push({
+            name: componentName,
+            symbol: symbol,
+            element: componentLi
+          });
+        }
+      }
+    });
+
+    if (unknownComponents.length === 0) {
+      // No hay componentes desconocidos, restaurar botón
+      compareButton.disabled = false;
+      compareButton.classList.remove('comparing');
+      compareButton.innerHTML = originalIcon;
+      compareButton.title = 'Comparar tots els components desconeguts';
+      this.comparisonProcesses.delete(metadataTypeName);
+      return;
+    }
+
+    // Comparar cada componente uno por uno
+    for (const comp of unknownComponents) {
+      // Comprobar si el proceso ha sido cancelado
+      if (process.cancelled) {
+        break;
+      }
+
+      // Verificar nuevamente que el símbolo sigue siendo desconocido
+      // (por si acaso se actualizó desde otro lugar)
+      if (!comp.symbol.classList.contains('symbol-unknown')) {
+        continue; // Ya fue comparado, saltar
+      }
+
+      // Obtener el componente completo desde el cache
+      const componentsList = this.loadedComponents.get(metadataTypeName);
+      if (!componentsList) continue;
+
+      const component = componentsList.find(c => {
+        const name = c.fullName || c.name || c.fileName;
+        return name === comp.name;
+      });
+
+      if (!component || !component.inOrgA || !component.inOrgB) continue;
+
+      // Comparar el componente
+      await this.compareComponent(component, metadataTypeName, comp.symbol);
+
+      // Comprobar de nuevo si fue cancelado después de la comparación
+      if (process.cancelled) {
+        break;
+      }
+
+      // Pequeña pausa para no sobrecargar el servidor
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Restaurar el botón
+    process.active = false;
+    compareButton.disabled = false;
+    compareButton.classList.remove('comparing');
+    compareButton.innerHTML = originalIcon;
+    compareButton.title = 'Comparar tots els components desconeguts';
+
+    // Actualizar visibilidad del botón (puede que ya no haya componentes desconocidos)
+    this.updateCompareButtonVisibility(metadataTypeName);
+
+    // Eliminar el proceso
+    this.comparisonProcesses.delete(metadataTypeName);
   }
 
   /**
@@ -935,6 +1113,11 @@ export class TreeView {
       symbol.classList.add('symbol-unknown');
       symbol.title = 'Haz clic para comparar contenido';
     }
+
+    // Actualizar visibilidad del botón de comparación después de actualizar un símbolo
+    setTimeout(() => {
+      this.updateCompareButtonVisibility(metadataTypeName);
+    }, 0);
   }
 
   /**
@@ -1338,6 +1521,37 @@ export class TreeView {
     });
 
     return visibleCount;
+  }
+
+  /**
+   * Actualiza la visibilidad del botón de comparación según si hay componentes desconocidos
+   * @param {string} metadataTypeName - Nombre del tipo de metadata
+   */
+  updateCompareButtonVisibility(metadataTypeName) {
+    const node = this.container.querySelector(`.tree-node[data-metadata-type="${metadataTypeName}"]`);
+    if (!node) return;
+
+    const compareButton = node.querySelector('.compare-all-btn');
+    if (!compareButton) return;
+
+    const childrenContainer = node.querySelector('.tree-children');
+    if (!childrenContainer) {
+      compareButton.style.display = 'none';
+      return;
+    }
+
+    // Buscar si hay componentes con símbolo desconocido
+    const components = childrenContainer.querySelectorAll('.tree-leaf, .bundle-node');
+    let hasUnknown = false;
+
+    components.forEach(componentLi => {
+      const symbol = componentLi.querySelector('.component-symbol');
+      if (symbol && symbol.classList.contains('symbol-unknown')) {
+        hasUnknown = true;
+      }
+    });
+
+    compareButton.style.display = hasUnknown ? 'inline-flex' : 'none';
   }
 
   /**

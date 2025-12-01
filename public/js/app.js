@@ -4,7 +4,7 @@ import { setActiveDiffEditorType, getActiveDiffEditorType, destroyDiffEditor } f
 
 // Constantes
 const STORAGE_KEY = 'orgdiff_orgs_list';
-const DEV_MODE = false; // Cambiar a false para producción
+const DEV_MODE = true; // Cambiar a false para producción
 
 // Estado de la aplicación
 let selectedOrgA = null;
