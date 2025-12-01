@@ -207,8 +207,8 @@ async function autoLoadDevMode() {
       const nodes = document.querySelectorAll('.tree-node');
       if (nodes.length > 0 && metadataTypeFilter && treeView) {
         // Los nodes ya están renderizados, aplicar el filtro
-        metadataTypeFilter.value = 'trigger';
-        const visibleCount = treeView.filterMetadataTypes('trigger', '');
+        metadataTypeFilter.value = 'ApexTrigger PermissionSet';
+        const visibleCount = treeView.filterMetadataTypes('ApexTrigger PermissionSet', '');
         metadataTypeFilter.blur();
 
         // Si solo queda un nodo visible, expandirlo automáticamente

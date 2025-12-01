@@ -1,10 +1,9 @@
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
-import { join, relative, sep as pathSeparator } from 'path';
+import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import AdmZip from 'adm-zip';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -531,17 +530,6 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     }
   }
 
-  // For non-Apex metadata types (those not supported by Tooling API), prefer Metadata API retrieve
-  // which is faster than project retrieve. Skip for Apex types since Tooling API is preferred for those.
-  if (!supportsToolingApi(metadataType)) {
-    try {
-      console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
-      return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
-    } catch (metadataError) {
-      console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
-    }
-  }
-
   // Fall back to the traditional sf project retrieve method
   // This is used for bundles (with filePath) or unsupported metadata types
   return retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath);
@@ -679,92 +667,6 @@ function validateOrgAlias(orgAlias, identifierName = 'org alias') {
   // Explicitly reject path traversal attempts
   if (orgAlias.includes('..')) {
     throw new Error(`Invalid ${identifierName}: path traversal not allowed`);
-  }
-}
-
-/**
- * Retrieves component content using sf metadata retrieve (Metadata API)
- * Mirrors the strategy used by Salesforce VS Code extensions for faster diffs
- * than project retrieve for most metadata types (non-Apex).
- * @param {string} metadataType - Type of metadata
- * @param {string} componentName - Name of the component
- * @param {string} orgAlias - Alias of the org
- * @param {string} filePath - Optional bundle file path
- * @returns {Promise<string>} - The content of the component
- */
-async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath = null) {
-  // Validate inputs to prevent command injection
-  validateMetadataIdentifier(metadataType, 'metadata type');
-  validateMetadataIdentifier(componentName, 'component name');
-  validateOrgAlias(orgAlias);
-
-  await mkdir(TMP_DIR, { recursive: true });
-
-  const retrieveDir = join(TMP_DIR, `metadata_${Date.now()}_${Math.random().toString(36).substring(7)}`);
-  const zipPath = join(retrieveDir, 'retrieve.zip');
-
-  try {
-    // Create the retrieve directory before attempting to write zip file into it
-    await mkdir(retrieveDir, { recursive: true });
-
-    // Use execFileAsync with array of arguments to avoid shell injection
-    const sfArgs = [
-      'retrieve', 'metadata',
-      '--metadata', `${metadataType}:${componentName}`,
-      '--target-org', orgAlias,
-      '--zip-file', zipPath,
-      '--single-package',
-      '--wait', '240'  // 4 minutes CLI wait, with 60s buffer before 5-minute Node timeout
-    ];
-
-    console.log(`[SF CLI] Executing: sf ${sfArgs.join(' ')}`);
-    await execFileAsync('sf', sfArgs, {
-      maxBuffer: 100 * 1024 * 1024,
-      timeout: 300000,  // 5 minutes (60s buffer after CLI --wait 240)
-      cwd: PROJECT_ROOT
-    });
-
-    // Use adm-zip for cross-platform zip handling instead of shell unzip command
-    // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
-    const zip = new AdmZip(zipPath);
-
-    // Filter zip entries to only include actual file paths with content
-    // Exclude directory entries (ending with /) and validate they have expected structure
-    const zipEntries = zip.getEntries()
-      .filter(entry => !entry.isDirectory)
-      .map(entry => entry.entryName)
-      .filter(entry => {
-        // Must have a path separator, not end with / (directories), and not be empty
-        return entry && entry.includes('/') && !entry.endsWith('/');
-      });
-
-    const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
-
-    if (!candidateEntry) {
-      // Only show the count of entries, not the actual paths which could expose sensitive info
-      throw new Error(
-        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries)`
-      );
-    }
-
-    // Extract the content of the matched entry as UTF-8 string
-    // Salesforce metadata files are always UTF-8 encoded text
-    const entry = zip.getEntry(candidateEntry);
-    if (!entry) {
-      throw new Error(`Entry ${candidateEntry} not found in zip file`);
-    }
-    const content = zip.readAsText(entry, 'utf8');
-
-    await rm(retrieveDir, { recursive: true, force: true });
-    return content;
-  } catch (error) {
-    try {
-      await rm(retrieveDir, { recursive: true, force: true });
-    } catch (_cleanupError) {
-      // ignore cleanup issues
-    }
-
-    throw error;
   }
 }
 
@@ -1012,45 +914,6 @@ function getPossibleComponentPaths(baseDir, metadataType, componentName) {
   }
 
   return paths;
-}
-
-/**
- * Converts platform-specific paths to posix (zip entries always use '/')
- * @param {string} pathStr - Path to normalize
- * @returns {string} - Posix-formatted path
- */
-function toPosixPath(pathStr) {
-  return pathStr.split(pathSeparator).join('/');
-}
-
-/**
- * Selects the best matching entry inside a retrieved zip file for a component
- * @param {string[]} zipEntries - Array of zip entry paths
- * @param {string} metadataType - Metadata type
- * @param {string} componentName - Component name
- * @param {string|null} filePath - Optional file path for bundles
- * @returns {string|undefined} - Matching zip entry
- */
-function selectZipEntry(zipEntries, metadataType, componentName, filePath) {
-  if (filePath) {
-    const normalizedFile = toPosixPath(filePath);
-    const directMatch = zipEntries.find(entry => entry.endsWith(normalizedFile) || entry.endsWith(`/${normalizedFile}`));
-    if (directMatch) {
-      return directMatch;
-    }
-  }
-
-  const relativeCandidates = getPossibleComponentPaths('unpackaged', metadataType, componentName)
-    .map(p => toPosixPath(relative('unpackaged', p)));
-
-  for (const candidate of relativeCandidates) {
-    const match = zipEntries.find(entry => entry.endsWith(candidate));
-    if (match) {
-      return match;
-    }
-  }
-
-  return zipEntries.find(entry => entry.toLowerCase().includes(componentName.toLowerCase()));
 }
 
 /**
