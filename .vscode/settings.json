@@ -1,0 +1,62 @@
+{
+	"actionButtons": {
+		"commands": [
+			{
+				"name": "|",
+				"color": "#000000FF",
+				"command": ""
+			},
+			{
+				"name": "$(github-inverted)",
+				"useVsCodeApi": true,
+				"command": "workbench.action.tasks.runTask",
+				"args": [
+					"Open remote Github Repository"
+				],
+				"color": "#b0b0b0"
+			},
+			{
+				"name": "$(terminal)",
+				"useVsCodeApi": true,
+				"command": "workbench.action.terminal.toggleTerminal",
+				"color": "#e5e5e5"
+			},
+			{
+				"name": "$(lightbulb-autofix) Lint",
+				"useVsCodeApi": true,
+				"command": "workbench.action.tasks.runTask",
+				"args": [
+					"Lint and fix with ESLint"
+				],
+				"color": "#8c7ce8"
+			},
+			{
+				"name": "$(testing-debug-icon) Test",
+				"useVsCodeApi": true,
+				"command": "workbench.action.tasks.test",
+				"color": "#a08022"
+			},
+			{
+				"name": "$(play) Run",
+				"useVsCodeApi": true,
+				"command": "workbench.action.tasks.runTask",
+				"args": [
+					"Run"
+				],
+                "color": "#2f877c"
+			},
+		],
+		"defaultColor": "white",
+		"reloadButton": null,
+		"loadNpmCommands": false
+	},
+	"files.exclude": {
+		".sf": true,
+		".sfdx": true
+	},
+	"search.exclude": {
+		"**/.sf": true,
+		"**/.sfdx": true,
+		"**/force-app": true
+	}
+}
