@@ -1127,6 +1127,10 @@ h2 {
     position: relative;
     top: 0;
   }
+
+  .diff-viewer {
+    min-height: 300px;
+  }
 }
 
 @media (max-width: 768px) {
