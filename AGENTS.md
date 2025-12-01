@@ -247,65 +247,41 @@ Authorize the following Salesforce orgs to be used for testing:
 - **ACA**
 - **ALMIRALL**
 
-To authorize use these Salesforce CLI commands:
+To authorize use this Salesforce CLI commands:
+```
+    source .env
 
-### Required Environment Variables
+    response=$(curl -s -X POST "https://login.salesforce.com/services/oauth2/token" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "grant_type=password" \
+      -d "client_id=$ACA_SF_ORG_CLIENT_ID" \
+      -d "client_secret=$ACA_SF_ORG_CLIENT_SECRET" \
+      -d "username=$ACA_SF_ORG_CLIENT_USERNAME" \
+      -d "password=$ACA_SF_ORG_CLIENT_PASSWORD")
 
-Set the following environment variables (e.g., in a `.env` file):
+    export ACA_SF_ACCESS_TOKEN=$(echo "$response" | jq -r '.access_token')
+    export ACA_SF_INSTANCE_URL=$(echo "$response" | jq -r '.instance_url')
 
-**For ACA org:**
-- `ACA_SF_ORG_CLIENT_ID`
-- `ACA_SF_ORG_CLIENT_SECRET`
-- `ACA_SF_ORG_CLIENT_USERNAME`
-- `ACA_SF_ORG_CLIENT_PASSWORD`
+    sf org login access-token --instance-url $ACA_SF_INSTANCE_URL --no-prompt --alias ACA
 
-**For ALMIRALL org:**
-- `ALMIRALL_SF_ORG_CLIENT_ID`
-- `ALMIRALL_SF_ORG_CLIENT_SECRET`
-- `ALMIRALL_SF_ORG_CLIENT_USERNAME`
-- `ALMIRALL_SF_ORG_CLIENT_PASSWORD`
+    response=$(curl -s -X POST "https://login.salesforce.com/services/oauth2/token" \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "grant_type=password" \
+      -d "client_id=$ALMIRALL_SF_ORG_CLIENT_ID" \
+      -d "client_secret=$ALMIRALL_SF_ORG_CLIENT_SECRET" \
+      -d "username=$ALMIRALL_SF_ORG_CLIENT_USERNAME" \
+      -d "password=$ALMIRALL_SF_ORG_CLIENT_PASSWORD")
 
-### Authorization Script for ACA
+    export ALMIRALL_SF_ACCESS_TOKEN=$(echo "$response" | jq -r '.access_token')
+    export ALMIRALL_SF_INSTANCE_URL=$(echo "$response" | jq -r '.instance_url')
 
-```bash
-source .env
-
-# Get OAuth token for ACA
-response=$(curl -s -X POST "https://test.salesforce.com/services/oauth2/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=password" \
-  -d "client_id=$ACA_SF_ORG_CLIENT_ID" \
-  -d "client_secret=$ACA_SF_ORG_CLIENT_SECRET" \
-  -d "username=$ACA_SF_ORG_CLIENT_USERNAME" \
-  -d "password=$ACA_SF_ORG_CLIENT_PASSWORD")
-
-export SF_ACCESS_TOKEN=$(echo "$response" | jq -r '.access_token')
-export SF_INSTANCE_URL=$(echo "$response" | jq -r '.instance_url')
-
-sf org login access-token --instance-url $SF_INSTANCE_URL --no-prompt --alias ACA
+    sf org login access-token --instance-url $ALMIRALL_SF_INSTANCE_URL --no-prompt --alias ALMIRALL
 ```
 
-### Authorization Script for ALMIRALL
-
-```bash
-source .env
-
-# Get OAuth token for ALMIRALL
-response=$(curl -s -X POST "https://test.salesforce.com/services/oauth2/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=password" \
-  -d "client_id=$ALMIRALL_SF_ORG_CLIENT_ID" \
-  -d "client_secret=$ALMIRALL_SF_ORG_CLIENT_SECRET" \
-  -d "username=$ALMIRALL_SF_ORG_CLIENT_USERNAME" \
-  -d "password=$ALMIRALL_SF_ORG_CLIENT_PASSWORD")
-
-export SF_ACCESS_TOKEN=$(echo "$response" | jq -r '.access_token')
-export SF_INSTANCE_URL=$(echo "$response" | jq -r '.instance_url')
-
-sf org login access-token --instance-url $SF_INSTANCE_URL --no-prompt --alias ALMIRALL
+Check the orgs are authorized with the following command:
 ```
-
-
+    sf org display --json
+```
 
 ### Auto-selection of Test Orgs
 To speed up testing during development, the application now automatically selects the following orgs if they are available in the list:
