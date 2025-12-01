@@ -50,6 +50,7 @@ export class TreeView {
     this.currentTypeFilter = ''; // Filtro actual de tipos aplicado
     this.currentComponentFilter = ''; // Filtro actual de componentes aplicado
     this.comparisonProcesses = new Map(); // Procesos de comparación en curso por metadata type
+    this.selectedForDeploy = new Set(); // Components only in Org A marked to deploy to Org B
   }
 
   getBundleTypes() {
@@ -514,6 +515,13 @@ export class TreeView {
           li.addEventListener('click', () => {
             this.openDiffViewer(component, metadataTypeName);
           });
+        } else if (component.inOrgA && !component.inOrgB) {
+          // Component només a Org A: obrir vista a la zona de l'editor,
+          // i des d'allà permetre marcar-lo per desplegar
+          li.style.cursor = 'pointer';
+          li.addEventListener('click', () => {
+            this.openOnlyInAViewer(metadataTypeName, name);
+          });
         }
       }
 
@@ -530,6 +538,209 @@ export class TreeView {
           this.updateCompareButtonVisibility(metadataTypeNameFromNode);
         }, 0);
       }
+    }
+  }
+
+  /**
+   * Alterna la selecció d'un component que només existeix a Org A per desplegar-lo a Org B
+   * @param {string} metadataTypeName - Nom del tipus de metadata
+   * @param {string} componentName - Nom del component
+   * @param {HTMLElement} liElement - Element de l'ítem al treeview
+   * @param {HTMLElement} symbolElement - Element del símbol associat
+   */
+  toggleDeploySelection(metadataTypeName, componentName, liElement, symbolElement) {
+    const key = this.getComponentKey(metadataTypeName, componentName);
+    const parentNode = liElement.closest('.tree-node[data-metadata-type]');
+
+    if (this.selectedForDeploy.has(key)) {
+      // Desmarcar
+      this.selectedForDeploy.delete(key);
+      liElement.classList.remove('component-selected-for-deploy');
+      if (parentNode) {
+        // Si ja no hi ha cap altre component seleccionat d'aquest tipus, netejar l'estat del node
+        const anySelected = parentNode.querySelector('.component-selected-for-deploy');
+        if (!anySelected) {
+          parentNode.classList.remove('node-has-selected-for-deploy');
+        }
+      }
+
+      // Restaurar símbol original "A"
+      symbolElement.textContent = 'A';
+      symbolElement.className = 'component-symbol symbol-org-a';
+      symbolElement.title = 'Només a Org A';
+    } else {
+      // Marcar per desplegar
+      this.selectedForDeploy.add(key);
+      liElement.classList.add('component-selected-for-deploy');
+      if (parentNode) {
+        parentNode.classList.add('node-has-selected-for-deploy');
+      }
+
+      // Utilitzar la mateixa icona que per als modificats (★)
+      symbolElement.textContent = '★';
+      symbolElement.className = 'component-symbol symbol-org-a symbol-selected-for-deploy';
+      symbolElement.title = 'Marcat per desplegar de Org A cap a Org B';
+
+      // Activar el botó de "Review changes" quan hi hagi almenys un component seleccionat
+      const reviewBtn = document.getElementById('reviewChangesBtn');
+      if (reviewBtn) {
+        reviewBtn.disabled = false;
+      }
+    }
+  }
+
+  /**
+   * Obre el panell de l'editor per a un component que només existeix a Org A
+   * i afegeix el botó de marcar/desmarcar per desplegar cap a Org B.
+   * @param {string} metadataTypeName
+   * @param {string} componentName
+   */
+  async openOnlyInAViewer(metadataTypeName, componentName) {
+    const diffPanel = document.getElementById('diffPanel');
+    const diffPanelTitle = document.getElementById('diffPanelTitle');
+    const diffViewer = document.getElementById('diffViewer');
+    const diffLabelB = document.getElementById('diffLabelB');
+
+    if (!diffPanel || !diffPanelTitle || !diffViewer) {
+      console.error('Diff panel elements not found');
+      return;
+    }
+
+    // Mostrar el panell
+    diffPanel.classList.add('visible');
+
+    // Netejar icona i títol
+    diffPanelTitle.innerHTML = '';
+
+    // Crear símbol "A" (només Org A)
+    const symbol = document.createElement('span');
+    symbol.className = 'component-symbol symbol-org-a';
+    symbol.textContent = 'A';
+    symbol.title = 'Només a Org A';
+    diffPanelTitle.appendChild(symbol);
+
+    const metadataTypeSpan = document.createElement('span');
+    metadataTypeSpan.className = 'diff-title-metadata-type';
+    metadataTypeSpan.textContent = metadataTypeName;
+
+    const separatorSpan = document.createTextNode(': ');
+
+    const componentNameSpan = document.createElement('span');
+    componentNameSpan.className = 'diff-title-component-name';
+    componentNameSpan.textContent = componentName;
+
+    diffPanelTitle.appendChild(document.createTextNode(' '));
+    diffPanelTitle.appendChild(metadataTypeSpan);
+    diffPanelTitle.appendChild(separatorSpan);
+    diffPanelTitle.appendChild(componentNameSpan);
+
+    // Actualitzar etiquetes d'orgs (manté A i B, però B estarà buit)
+    const diffLabelA = document.getElementById('diffLabelA');
+    const diffLabelB = document.getElementById('diffLabelB');
+    const labelTextA = diffLabelA?.querySelector('.diff-label-text');
+    const labelTextB = diffLabelB?.querySelector('.diff-label-text');
+    if (labelTextA) labelTextA.textContent = `${this.orgAliasA}`;
+    if (labelTextB) labelTextB.textContent = `${this.orgAliasB}`;
+
+    // Asegurar altura visible
+    diffViewer.style.minHeight = '420px';
+    diffViewer.style.height = '420px';
+
+    // Destruir qualsevol editor anterior
+    try {
+      destroyDiffEditor();
+    } catch (err) {
+      console.warn('Error destroying previous diff viewer:', err);
+    }
+
+    // Mostrar indicador de càrrega
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading';
+    const loadingIndicator = createLoadingIndicator('spinner', 'Cargando contenido de Org A');
+    loadingDiv.appendChild(loadingIndicator);
+    diffViewer.innerHTML = '';
+    diffViewer.appendChild(loadingDiv);
+
+    // Eliminar (si existeix) qualsevol botó de marcar deploy d'una vista anterior
+    if (diffLabelB) {
+      const existingDeployBtn = diffLabelB.querySelector('.btn-mark-deploy');
+      if (existingDeployBtn) {
+        existingDeployBtn.remove();
+      }
+    }
+
+    try {
+      // Només cal carregar el contingut d'Org A; Org B quedarà buit
+      const dataA = await fetch(
+        `/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`
+      ).then(res => res.json());
+
+      if (!dataA.success) {
+        const errorMsg = dataA.error || 'Error desconegut';
+        diffViewer.innerHTML = '';
+        diffViewer.appendChild(this.createErrorElement(`Error al carregar el contingut de Org A: ${errorMsg}`));
+        return;
+      }
+
+      const language = this.getLanguageForMetadataType(metadataTypeName);
+
+      // Esperar perquè el layout estigui actualitzat
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const panelRect = diffPanel.getBoundingClientRect();
+      if (panelRect.width === 0 || panelRect.height === 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Inicialitzar editor: original = contingut d'A, modificat = buit
+      await initDiffEditor('diffViewer', dataA.content, '', language, {});
+
+      // Crear/actualitzar botó "Mark for deploy" al costat del títol de la org B
+      if (diffLabelB) {
+        const key = this.getComponentKey(metadataTypeName, componentName);
+        let deployBtn = diffLabelB.querySelector('.btn-mark-deploy');
+        if (!deployBtn) {
+          deployBtn = document.createElement('button');
+          deployBtn.type = 'button';
+          deployBtn.className = 'btn-mark-deploy';
+          diffLabelB.appendChild(deployBtn);
+        }
+
+        const updateButtonText = () => {
+          if (this.selectedForDeploy.has(key)) {
+            deployBtn.textContent = 'Unmark deploy';
+            deployBtn.title = 'Desmarcar aquest component per desplegar-lo a Org B';
+          } else {
+            deployBtn.textContent = 'Mark for deploy';
+            deployBtn.title = 'Marcar aquest component per desplegar-lo a Org B';
+          }
+        };
+
+        updateButtonText();
+
+        deployBtn.onclick = () => {
+          // Localitzar el node i el símbol corresponents al component
+          const parentNode = this.container.querySelector(
+            `.tree-node[data-metadata-type="${metadataTypeName}"]`
+          );
+          if (!parentNode) return;
+          const liElement = parentNode.querySelector(
+            `.tree-leaf[data-component-name="${componentName}"]`
+          );
+          if (!liElement) return;
+          const symbolElement = liElement.querySelector('.component-symbol');
+          if (!symbolElement) return;
+
+          this.toggleDeploySelection(metadataTypeName, componentName, liElement, symbolElement);
+          updateButtonText();
+        };
+      }
+    } catch (error) {
+      console.error('Error opening single-org viewer:', error);
+      const fullErrorMsg = `Error al obrir el visor per a Org A: ${error.message}`;
+      diffViewer.innerHTML = '';
+      diffViewer.appendChild(this.createErrorElement(fullErrorMsg));
     }
   }
 
@@ -781,6 +992,7 @@ export class TreeView {
     const diffPanel = document.getElementById('diffPanel');
     const diffPanelTitle = document.getElementById('diffPanelTitle');
     const diffViewer = document.getElementById('diffViewer');
+    const diffLabelB = document.getElementById('diffLabelB');
 
     if (!diffPanel || !diffPanelTitle || !diffViewer) {
       console.error('Diff panel elements not found');
@@ -873,6 +1085,14 @@ export class TreeView {
     loadingDiv.appendChild(loadingIndicator);
     diffViewer.innerHTML = '';
     diffViewer.appendChild(loadingDiv);
+
+    // Si venim d'un component "only in A", eliminar qualsevol botó de marcar deploy
+    if (diffLabelB) {
+      const existingDeployBtn = diffLabelB.querySelector('.btn-mark-deploy');
+      if (existingDeployBtn) {
+        existingDeployBtn.remove();
+      }
+    }
 
 
     // Hacer la carga asíncrona sin bloquear la UI

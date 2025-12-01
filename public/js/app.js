@@ -914,20 +914,28 @@ if (toggleTreeviewBtn && mainContent) {
 function openReviewChangesModal() {
   if (!reviewChangesModal || !reviewChangesContent) return;
 
-  // Buscar tots els components marcats com a resolts al treeview
-  const resolvedElements = document.querySelectorAll('.tree-leaf.component-resolved, .bundle-node.component-resolved');
+  // Buscar tots els components marcats com a resolts o seleccionats per desplegar al treeview
+  const markedElements = document.querySelectorAll(
+    '.tree-leaf.component-resolved, .bundle-node.component-resolved, .tree-leaf.component-selected-for-deploy'
+  );
 
-  if (!resolvedElements.length) {
-    reviewChangesContent.innerHTML = '<p class="empty-message">Encara no hi ha cap component modificat.</p>';
+  if (!markedElements.length) {
+    reviewChangesContent.innerHTML = '<p class="empty-message">Encara no hi ha cap component modificat o marcat per desplegar.</p>';
   } else {
     const items = [];
-    resolvedElements.forEach((el) => {
+    markedElements.forEach((el) => {
       const nameEl = el.querySelector('.component-name');
       const node = el.closest('.tree-node[data-metadata-type]');
       const typeName = node ? node.dataset.metadataType : '';
       const compName = nameEl ? nameEl.textContent : '';
+      const isResolved = el.classList.contains('component-resolved');
+      const isSelectedForDeploy = el.classList.contains('component-selected-for-deploy');
       if (typeName && compName) {
-        items.push({ type: typeName, name: compName });
+        items.push({
+          type: typeName,
+          name: compName,
+          status: isResolved ? 'resolved' : (isSelectedForDeploy ? 'deploy-from-a' : 'unknown')
+        });
       }
     });
 
@@ -937,7 +945,7 @@ function openReviewChangesModal() {
     });
 
     const ul = document.createElement('ul');
-    items.forEach(({ type, name }) => {
+    items.forEach(({ type, name, status }) => {
       const li = document.createElement('li');
       const badge = document.createElement('span');
       badge.className = 'badge-type';
@@ -945,8 +953,18 @@ function openReviewChangesModal() {
       const nameSpan = document.createElement('span');
       nameSpan.className = 'item-name';
       nameSpan.textContent = name;
+      const statusSpan = document.createElement('span');
+      statusSpan.className = 'item-path';
+      if (status === 'resolved') {
+        statusSpan.textContent = 'Contingut sincronitzat de Org A cap a Org B';
+      } else if (status === 'deploy-from-a') {
+        statusSpan.textContent = 'Marcat per desplegar (només existeix a Org A)';
+      }
       li.appendChild(badge);
       li.appendChild(nameSpan);
+      if (statusSpan.textContent) {
+        li.appendChild(statusSpan);
+      }
       ul.appendChild(li);
     });
 

@@ -93,7 +93,7 @@ body {
 
 .global-theme-toggle {
   position: fixed;
-  top: 8px;
+  top: 50px;
   right: 12px;
   z-index: 9000;
 }
@@ -660,6 +660,26 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.btn-mark-deploy {
+  background-color: #2ecc71;
+  color: #ffffff;
+  border: none;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.btn-mark-deploy:hover {
+  background-color: #27ae60;
+}
+
+.btn-mark-deploy:active {
+  transform: scale(0.97);
 }
 
 .btn-icon-close {
@@ -1288,6 +1308,24 @@ h2 {
   font-weight: 600;
 }
 
+/* Components només a Org A marcats per desplegar cap a Org B */
+.component-selected-for-deploy .component-name {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.node-has-selected-for-deploy .node-name {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.symbol-selected-for-deploy {
+  /* Mateix estil visual que els modificats (symbol-resolved) */
+  background-color: #ff9800;
+  color: #ffffff;
+  border-radius: 50%;
+}
+
 /* Modal Review changes */
 .modal-overlay {
   position: fixed;
@@ -1433,6 +1471,133 @@ h2 {
   background-color: #95a5a6;
   color: white;
   border-radius: 50%;
+}
+
+/* Global light/dark theme (page-level) */
+.orgdiff-theme-dark body {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+.orgdiff-theme-dark .container {
+  background-color: transparent;
+}
+
+.orgdiff-theme-dark #screen1 .container {
+  background-color: #1e1e1e;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.orgdiff-theme-dark #screen1 h1 {
+  color: #eaeaea;
+}
+
+.orgdiff-theme-dark .org-selector label {
+  color: #e0e0e0;
+}
+
+.orgdiff-theme-dark .loading-message {
+  background-color: #263238;
+  color: #cfd8dc;
+}
+
+.orgdiff-theme-dark .org-selector select,
+.orgdiff-theme-dark .editor-toggle select {
+  background-color: #263238;
+  color: #e0e0e0;
+  border-color: #455a64;
+}
+
+.orgdiff-theme-dark .org-selector select:disabled {
+  background-color: #212121;
+  color: #757575;
+  border-color: #424242;
+}
+
+.orgdiff-theme-dark .refresh-orgs-link {
+  color: #90caf9;
+}
+
+.orgdiff-theme-dark .refresh-orgs-link:hover {
+  color: #64b5f6;
+}
+
+.orgdiff-theme-dark .error-message {
+  background-color: #b71c1c;
+  color: #ffebee;
+}
+
+.orgdiff-theme-dark .org-info,
+.orgdiff-theme-dark .treeview,
+.orgdiff-theme-dark .treeview-column,
+.orgdiff-theme-dark .diff-panel {
+  background-color: #1f1f1f;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.orgdiff-theme-dark .metadata-filter,
+.orgdiff-theme-dark .treeview,
+.orgdiff-theme-dark .diff-labels,
+.orgdiff-theme-dark .org-code-label,
+.orgdiff-theme-dark .org-code-textarea {
+  background-color: #242424;
+  color: #e0e0e0;
+  border-color: #3a3a3a;
+}
+
+/* Millorar llegibilitat dels nodes en mode fosc */
+.orgdiff-theme-dark .node-name,
+.orgdiff-theme-dark .component-name {
+  color: #f0f0f0;
+}
+
+.orgdiff-theme-dark .node-name.node-empty {
+  color: #9a9a9a;
+}
+
+.orgdiff-theme-dark .node-counts {
+  color: #cccccc;
+}
+
+.orgdiff-theme-dark .tree-node .node-content:hover,
+.orgdiff-theme-dark .tree-leaf:hover,
+.orgdiff-theme-dark .bundle-node:hover {
+  background-color: #2c2c2c;
+}
+
+.orgdiff-theme-dark .diff-panel-header,
+.orgdiff-theme-dark .org-code-label {
+  border-color: #3a3a3a;
+}
+
+.orgdiff-theme-dark .btn-primary,
+.orgdiff-theme-dark .btn-secondary,
+.orgdiff-theme-dark .btn-modal-primary {
+  background-color: #2d8cd6;
+}
+
+.orgdiff-theme-dark .btn-primary:hover,
+.orgdiff-theme-dark .btn-secondary:hover,
+.orgdiff-theme-dark .btn-modal-primary:hover {
+  background-color: #2270aa;
+}
+
+.orgdiff-theme-dark .btn-modal-secondary {
+  background-color: #2a2a2a;
+  border-color: #3a3a3a;
+  color: #ccc;
+}
+
+.orgdiff-theme-dark .btn-review-changes {
+  background-color: #2a2a2a;
+  border-color: #3a3a3a;
+  color: #ccc;
+}
+
+.orgdiff-theme-dark .warning-message {
+  background-color: #3e3415;
+  color: #f5d27a;
+  border-color: #8a6d1e;
 }
 
 /* CodeMirror theming based on global theme */

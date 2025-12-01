@@ -22,8 +22,8 @@ Enable Salesforce developers to:
 
 ### Frontend
 - **Vanilla JavaScript**: No frameworks, pure JavaScript with ES6 modules
-- **Monaco Editor**: For code diff visualization (prepared for future phases)
-- **Custom TreeView**: Own implementation to display metadata types and components
+- **Diff editors**: Monaco / CodeMirror (selectable) for code diff visualization
+- **Custom TreeView**: Own implementation to display metadata types and components and their presence in each org
 
 ## Application Flow
 
@@ -52,11 +52,14 @@ Enable Salesforce developers to:
    - Components are rendered as **leaf nodes** (children of the metadata type)
    - Components are cached to avoid unnecessary reloads
 
-### Step 3: Comparison and Management (Future Phases)
-- Visualizing differences using Monaco Editor diff viewer
-- Deploying components from one org to another
-- Conflict resolution
-- Filtering and search
+### Step 3: Comparison and Management
+- Visualizing differences using the diff viewer (Monaco / CodeMirror via `diffManager.js`)
+- Marking components that exist only in Org A to be deployed to Org B in the future
+- Marking components resolved when Org B content is updated from Org A via the diff workflow
+- A consolidated "Review changes" modal listing:
+  - Resolved components (content of Org B updated from Org A)
+  - Components only in Org A selected for deploy
+- (Future) Executing the actual deploy of selected components
 
 ## Performance Strategy
 
@@ -231,16 +234,19 @@ The server runs on `http://localhost:3200` by default.
 - Org access validation
 - Metadata types TreeView
 - **Metadata types comparison between orgs with warning** if there are significant differences (indicates possible types hidden by permissions)
-- On-demand component loading
-- Performance optimization (names only, not content)
+- On-demand component loading (names only, no content)
+- Diff viewer based on Monaco / CodeMirror, selectable via `diffManager.js`
+- Visual marking of:
+  - Components existing only in Org A, toggled as "selected for deploy" towards Org B
+  - Components whose content in Org B has been updated from Org A (resolved)
+- "Review changes" modal that aggregates both resolved components and components selected for deploy
 - Org cache in localStorage for fast initial load
 
 ### 🚧 Future Phases
-- Visual component comparison using Monaco Editor diff viewer
-- Component deployment from one org to another
-- Conflict resolution
-- Filtering and search of metadata types and components
-- Difference export
+- Actual deployment of selected components from Org A to Org B
+- Conflict resolution UX on top of the diff editors
+- Advanced filtering and search of metadata types and components
+- Difference export (reports)
 
 ## Testing
 Authorize the following Salesforce orgs to be used for testing:
