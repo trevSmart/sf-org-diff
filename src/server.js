@@ -18,6 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 3200;
 const MONACO_DIR = join(__dirname, '..', 'node_modules', 'monaco-editor', 'min');
 const FONTAWESOME_DIR = join(__dirname, '..', 'node_modules', '@fortawesome', 'fontawesome-free');
+const NODE_MODULES_DIR = join(__dirname, '..', 'node_modules');
 
 // Middleware para parsear JSON
 app.use(express.json({ limit: '100mb' })); // Aumentar límite de JSON
@@ -27,6 +28,29 @@ app.use('/monaco', express.static(MONACO_DIR));
 
 // Servir Font Awesome localmente
 app.use('/fontawesome', express.static(FONTAWESOME_DIR));
+
+// Servir solo los paquetes de CodeMirror necesarios (no todo node_modules por seguridad)
+const allowedPackages = ['codemirror', '@codemirror', '@lezer', '@marijn', 'style-mod', 'w3c-keyname', 'crelt'];
+app.use('/node_modules', (req, res, next) => {
+  // Extract the package name from the path
+  const pathParts = req.path.split('/').filter(Boolean);
+  if (pathParts.length === 0) {
+    return res.status(404).send('Not found');
+  }
+  
+  // Check if it's a scoped package (@scope/package) or regular package
+  const packageName = pathParts[0].startsWith('@') 
+    ? `${pathParts[0]}/${pathParts[1]}` 
+    : pathParts[0];
+  const packageScope = pathParts[0].startsWith('@') ? pathParts[0] : pathParts[0];
+  
+  // Only allow specific packages needed for CodeMirror
+  if (!allowedPackages.some(pkg => packageScope === pkg || packageName.startsWith(pkg))) {
+    return res.status(403).send('Forbidden');
+  }
+  
+  next();
+}, express.static(NODE_MODULES_DIR));
 
 // Endpoint para obtener la lista de orgs
 app.get('/api/orgs', async (req, res) => {
@@ -190,7 +214,7 @@ app.get('/api/bundle-files/:orgAlias/:metadataType/:componentName', async (req, 
 });
 
 // Manejar rutas no encontradas para API
-app.use('/api/*', (req, res) => {
+app.use('/api/*path', (req, res) => {
   res.status(404).json({
     success: false,
     error: 'API endpoint not found'
