@@ -4,6 +4,7 @@ import { readFile, mkdir, rm, readdir } from 'fs/promises';
 import { join, relative, sep as pathSeparator } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import AdmZip from 'adm-zip';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -638,15 +639,11 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       cwd: PROJECT_ROOT
     });
 
-    const { stdout: zipList } = await execAsync(`unzip -l "${zipPath}"`, {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 120000
-    });
-
-    const zipEntries = zipList
-      .split('\n')
-      .map(line => line.trim().split(/\s+/).pop())
-      .filter(entry => entry && entry.includes('/') && entry !== 'Archive:');
+    // Use adm-zip for cross-platform zip handling instead of shell unzip command
+    const zip = new AdmZip(zipPath);
+    const zipEntries = zip.getEntries()
+      .map(entry => entry.entryName)
+      .filter(entry => entry && entry.includes('/'));
 
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
@@ -657,10 +654,8 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       );
     }
 
-    const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
-      maxBuffer: 100 * 1024 * 1024,
-      timeout: 120000
-    });
+    // Extract the content of the matched entry as UTF-8 string
+    const content = zip.readAsText(candidateEntry);
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
