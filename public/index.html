@@ -4,34 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrgDiff - Comparador de Metadata Salesforce</title>
+    <link rel="stylesheet" href="/fontawesome/css/all.min.css">
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
     <!-- Pantalla 1: Selección de Orgs -->
     <div id="screen1" class="screen">
         <div class="container">
-            <h1>OrgDiff - Comparador de Metadata Salesforce</h1>
+            <h1><i class="fas fa-cubes"></i> OrgDiff - Comparador de Metadata Salesforce</h1>
             <div class="org-selection">
                 <div class="org-selection-header">
                     <div id="loadingMessage" class="loading-message">Cargando orgs de Salesforce...</div>
-                    <button id="refreshOrgsBtn" class="btn-secondary">Actualizar lista de orgs</button>
                 </div>
                 <div class="org-selection-row">
                     <div class="org-selector">
-                        <label for="orgA">Org A:</label>
+                        <label for="orgA">
+                            <span class="component-symbol symbol-org-a">A</span>
+                            <span style="margin-left: 8px;">Org A:</span>
+                        </label>
                         <select id="orgA" name="orgA" disabled>
                             <option value="">-- Cargando orgs... --</option>
                         </select>
                     </div>
                     <div class="org-selector">
-                        <label for="orgB">Org B:</label>
+                        <label for="orgB">
+                            <span class="component-symbol symbol-org-b">B</span>
+                            <span style="margin-left: 8px;">Org B:</span>
+                        </label>
                         <select id="orgB" name="orgB" disabled>
                             <option value="">-- Cargando orgs... --</option>
                         </select>
                     </div>
                 </div>
+                <a href="#" id="refreshOrgsBtn" class="refresh-orgs-link">
+                    <i class="fas fa-sync-alt"></i> Actualizar lista de orgs
+                </a>
             </div>
             <div class="actions">
+                <div class="editor-toggle">
+                    <label for="diffEditorSelect">Editor de diff:</label>
+                    <select id="diffEditorSelect">
+                        <option value="monaco">Monaco</option>
+                        <option value="codemirror">CodeMirror</option>
+                    </select>
+                </div>
                 <button id="continueBtn" class="btn-primary">Continuar</button>
             </div>
             <div id="errorMessage" class="error-message" style="display: none;"></div>
@@ -42,40 +58,63 @@
     <div id="screen2" class="screen" style="display: none;">
         <div class="container">
             <div class="screen-header">
+                <button id="backBtn" class="btn-icon-back" title="Volver">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
                 <h1>Metadata Types</h1>
-                <button id="backBtn" class="btn-secondary">← Volver</button>
             </div>
             <div class="org-info">
                 <div class="org-info-item">
-                    <strong>Org A:</strong> <span id="orgAInfo"></span>
+                    <span class="component-symbol symbol-org-a">A</span>
+                    <span id="orgAInfo"></span>
+                </div>
+                <div class="org-info-separator">
+                    <i class="fas fa-arrow-right-arrow-left separator-icon"></i>
                 </div>
                 <div class="org-info-item">
-                    <strong>Org B:</strong> <span id="orgBInfo"></span>
+                    <span class="component-symbol symbol-org-b">B</span>
+                    <span id="orgBInfo"></span>
                 </div>
             </div>
             <div id="metadataTypesWarning" class="warning-message" style="display: none;"></div>
             <div class="main-content">
-                <div class="treeview-container">
-                    <div class="filter-container">
-                        <input type="text" id="metadataFilter" class="metadata-filter" placeholder="Filtrar tipos de metadato...">
+                <div class="treeview-container" id="treeviewContainer">
+                    <div id="treeview" class="treeview">
+                        <div class="filter-wrapper">
+                            <input type="text" id="metadataFilter" class="metadata-filter" placeholder="Filtrar tipos de metadato...">
+                            <button type="button" id="clearFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <div id="metadataSuggestions" class="metadata-suggestions"></div>
+                        </div>
                     </div>
-                    <div id="treeview" class="treeview"></div>
                 </div>
+                <div class="resizer" id="resizer"></div>
                 <!-- Panel de diff viewer -->
                 <div id="diffPanel" class="diff-panel">
                     <div class="diff-panel-header">
                         <h2 id="diffPanelTitle">Comparación de Componente</h2>
-                        <button id="closeDiffBtn" class="btn-secondary">✕ Cerrar</button>
+                        <div class="diff-panel-actions">
+                            <label class="theme-toggle-switch" title="Alternar tema claro/oscuro">
+                                <input type="checkbox" id="themeToggleBtn">
+                                <span class="theme-toggle-slider"></span>
+                            </label>
+                            <button id="closeDiffBtn" class="btn-icon-close" title="Cerrar">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="diff-labels">
-                        <span class="diff-label-left" id="diffLabelA">Org A</span>
-                        <span class="diff-label-right" id="diffLabelB">Org B</span>
+                        <span class="diff-label-left" id="diffLabelA">
+                            <span class="component-symbol symbol-org-a">A</span>
+                            <span class="diff-label-text">Org A</span>
+                        </span>
+                        <span class="diff-label-right" id="diffLabelB">
+                            <span class="component-symbol symbol-org-b">B</span>
+                            <span class="diff-label-text">Org B</span>
+                        </span>
                     </div>
                     <div id="diffViewer" class="diff-viewer"></div>
-                    <div class="org-a-code-container">
-                        <div class="org-a-code-label">Código Org A:</div>
-                        <textarea id="orgACodeTextarea" class="org-a-code-textarea" readonly></textarea>
-                    </div>
                 </div>
             </div>
         </div>

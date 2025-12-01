@@ -221,7 +221,7 @@ npm run dev
 npm start
 ```
 
-El servidor se ejecuta en `http://localhost:3000` por defecto.
+El servidor se ejecuta en `http://localhost:3200` por defecto.
 
 ## Estado Actual del Proyecto
 

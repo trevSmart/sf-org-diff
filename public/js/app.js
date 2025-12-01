@@ -1,4 +1,6 @@
 import { TreeView } from './treeView.js';
+import { initResizer } from './resizer.js';
+import { setActiveDiffEditorType, getActiveDiffEditorType, destroyDiffEditor } from './diffManager.js';
 
 // Constantes
 const STORAGE_KEY = 'orgdiff_orgs_list';
@@ -22,9 +24,21 @@ const orgAInfo = document.getElementById('orgAInfo');
 const orgBInfo = document.getElementById('orgBInfo');
 const loadingMessage = document.getElementById('loadingMessage');
 const metadataFilter = document.getElementById('metadataFilter');
+const metadataSuggestions = document.getElementById('metadataSuggestions');
+const clearFilterBtn = document.getElementById('clearFilterBtn');
+const diffEditorSelect = document.getElementById('diffEditorSelect');
 const backBtn = document.getElementById('backBtn');
 const closeDiffBtn = document.getElementById('closeDiffBtn');
 const metadataTypesWarning = document.getElementById('metadataTypesWarning');
+let metadataTypeNames = [];
+
+// Inicializar selector de editor de diff
+if (diffEditorSelect) {
+  diffEditorSelect.value = getActiveDiffEditorType();
+  diffEditorSelect.addEventListener('change', (e) => {
+    setActiveDiffEditorType(e.target.value);
+  });
+}
 
 /**
  * Guarda la lista de orgs en localStorage
@@ -61,7 +75,7 @@ async function loadOrgs(_forceRefresh = false) {
   // Mostrar mensaje de carga con indicador animado y deshabilitar combos
   loadingMessage.innerHTML = '<span class="loading-spinner"></span> Cargando orgs de Salesforce...';
   loadingMessage.style.display = 'block';
-  refreshOrgsBtn.disabled = true;
+  refreshOrgsBtn.classList.add('disabled');
   orgASelect.disabled = true;
   orgBSelect.disabled = true;
 
@@ -78,7 +92,7 @@ async function loadOrgs(_forceRefresh = false) {
       // Ocultar mensaje de carga y habilitar combos
       loadingMessage.style.display = 'none';
       loadingMessage.textContent = 'Cargando orgs de Salesforce...'; // Restaurar texto original
-      refreshOrgsBtn.disabled = false;
+      refreshOrgsBtn.classList.remove('disabled');
       orgASelect.disabled = false;
       orgBSelect.disabled = false;
     } else {
@@ -86,7 +100,7 @@ async function loadOrgs(_forceRefresh = false) {
       // Ocultar mensaje de carga pero mantener combos deshabilitados
       loadingMessage.style.display = 'none';
       loadingMessage.textContent = 'Cargando orgs de Salesforce...'; // Restaurar texto original
-      refreshOrgsBtn.disabled = false;
+      refreshOrgsBtn.classList.remove('disabled');
       orgASelect.disabled = true;
       orgBSelect.disabled = true;
     }
@@ -95,7 +109,7 @@ async function loadOrgs(_forceRefresh = false) {
     showError('Error al conectar con el servidor');
     // Ocultar mensaje de carga pero mantener combos deshabilitados
     loadingMessage.style.display = 'none';
-    refreshOrgsBtn.disabled = false;
+    refreshOrgsBtn.classList.remove('disabled');
     orgASelect.disabled = true;
     orgBSelect.disabled = true;
   }
@@ -113,7 +127,7 @@ function initializeOrgs() {
     orgsList = storedOrgs;
     populateOrgSelects();
     loadingMessage.style.display = 'none';
-    refreshOrgsBtn.disabled = false;
+    refreshOrgsBtn.classList.remove('disabled');
     orgASelect.disabled = false;
     orgBSelect.disabled = false;
     console.log(`Cargadas ${orgsList.length} orgs desde localStorage`);
@@ -175,14 +189,32 @@ async function autoLoadDevMode() {
     // Mostrar pantalla 2 (asíncrono, no bloquea)
     showScreen2();
 
-    // Aplicar filtro de "class" para mostrar ApexClass
-    // Esperar un poco para asegurar que treeView y los metadata types estén cargados
-    setTimeout(() => {
-      if (metadataFilter && treeView) {
-        metadataFilter.value = 'class';
-        treeView.filterMetadataTypes('class');
+    // Aplicar filtro de "trigger" para mostrar ApexTrigger
+    // Esperar a que los metadata types estén renderizados
+    // Usar un intervalo para verificar cuando los nodes estén disponibles
+    const checkAndApplyFilter = () => {
+      const nodes = document.querySelectorAll('.tree-node');
+      if (nodes.length > 0 && metadataFilter && treeView) {
+        // Los nodes ya están renderizados, aplicar el filtro
+        metadataFilter.value = 'trigger';
+        const visibleCount = treeView.filterMetadataTypes('trigger');
+        metadataFilter.blur();
+
+        // Si solo queda un nodo visible, expandirlo automáticamente
+        if (visibleCount === 1) {
+          // Esperar un poco más para asegurar que el DOM está actualizado
+          setTimeout(() => {
+            treeView.autoExpandSingleVisibleNode();
+          }, 150);
+        }
+      } else {
+        // Aún no hay nodes, intentar de nuevo en 200ms
+        setTimeout(checkAndApplyFilter, 200);
       }
-    }, 500);
+    };
+
+    // Empezar a verificar después de un pequeño delay inicial
+    setTimeout(checkAndApplyFilter, 300);
   } catch (error) {
     console.error('Dev mode: Error al validar orgs:', error);
   }
@@ -315,14 +347,33 @@ async function showScreen2() {
   const orgA = orgsList.find(o => (o.alias || o.username) === selectedOrgA);
   const orgB = orgsList.find(o => (o.alias || o.username) === selectedOrgB);
 
-  orgAInfo.textContent = orgA?.alias || orgA?.username || selectedOrgA;
-  orgBInfo.textContent = orgB?.alias || orgB?.username || selectedOrgB;
+  // Actualizar el texto de las orgs (los iconos ya están en el HTML)
+  const orgAText = orgA?.alias || orgA?.username || selectedOrgA;
+  const orgBText = orgB?.alias || orgB?.username || selectedOrgB;
+
+  // Buscar el span que contiene el texto de la org dentro de org-info-item
+  const orgAInfoItem = orgAInfo.closest('.org-info-item');
+  const orgBInfoItem = orgBInfo.closest('.org-info-item');
+
+  if (orgAInfoItem) {
+    // El span orgAInfo ya existe, solo actualizar su contenido
+    orgAInfo.textContent = orgAText;
+  }
+
+  if (orgBInfoItem) {
+    // El span orgBInfo ya existe, solo actualizar su contenido
+    orgBInfo.textContent = orgBText;
+  }
 
   // Inicializar treeview único con ambas orgs
   treeView = new TreeView('treeview', selectedOrgA, selectedOrgB);
 
+  // Inicializar el resizer para redimensionar el treeview
+  initResizer();
+
   // Mostrar indicador de carga mientras se cargan los metadata types
   const treeviewElement = document.getElementById('treeview');
+  const filterWrapper = treeviewElement.querySelector('.filter-wrapper');
   const loadingDiv = document.createElement('div');
   loadingDiv.className = 'loading';
   loadingDiv.style.padding = '20px';
@@ -334,6 +385,9 @@ async function showScreen2() {
   loadingText.textContent = ' Cargando tipos de metadata...';
   loadingDiv.appendChild(loadingText);
   treeviewElement.innerHTML = '';
+  if (filterWrapper) {
+    treeviewElement.appendChild(filterWrapper);
+  }
   treeviewElement.appendChild(loadingDiv);
 
   // Cargar metadata types de ambas orgs de forma asíncrona y compararlos
@@ -368,14 +422,41 @@ async function showScreen2() {
 
         const uniqueTypes = Array.from(uniqueTypesMap.values());
 
-        // Renderizar el treeview con todos los tipos únicos
-        treeView.renderMetadataTypes(uniqueTypes);
+        // Actualizar opciones del filtro con todos los tipos disponibles
+        updateMetadataFilterOptions(uniqueTypes);
+
+        // Verificar que treeView existe y que estamos en la screen2 antes de renderizar
+        if (treeView && screen2.style.display !== 'none') {
+          // Renderizar el treeview con todos los tipos únicos
+          treeView.renderMetadataTypes(uniqueTypes);
+
+          // Aplicar el filtro si ya hay un término en el input de filtro
+          if (metadataFilter && metadataFilter.value.trim()) {
+            treeView.filterMetadataTypes(metadataFilter.value);
+          }
+        }
       } else {
-        treeviewElement.innerHTML = '<div class="error-message">Error al cargar metadata types</div>';
+        const filterWrapper = treeviewElement.querySelector('.filter-wrapper');
+        treeviewElement.innerHTML = '';
+        if (filterWrapper) {
+          treeviewElement.appendChild(filterWrapper);
+        }
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-message';
+        errorDiv.textContent = 'Error al cargar metadata types';
+        treeviewElement.appendChild(errorDiv);
       }
     } catch (error) {
       console.error('Error loading metadata types:', error);
-      treeviewElement.innerHTML = '<div class="error-message">Error al cargar los tipos de metadata</div>';
+      const filterWrapper = treeviewElement.querySelector('.filter-wrapper');
+      treeviewElement.innerHTML = '';
+      if (filterWrapper) {
+        treeviewElement.appendChild(filterWrapper);
+      }
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = 'Error al cargar los tipos de metadata';
+      treeviewElement.appendChild(errorDiv);
     }
   })();
 }
@@ -423,6 +504,97 @@ function checkMetadataTypesDifference(typesA, typesB) {
 }
 
 /**
+ * Actualiza las opciones del filtro (datalist) con los tipos de metadata disponibles
+ * @param {Array} metadataTypes - Lista de tipos de metadata
+ */
+function updateMetadataFilterOptions(metadataTypes) {
+  metadataTypeNames = metadataTypes
+    .map(type => type.xmlName || type.directoryName)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  renderMetadataSuggestions(metadataFilter?.value || '');
+  updateClearButtonVisibility();
+}
+
+function renderMetadataSuggestions(query) {
+  if (!metadataSuggestions || !metadataFilter) return;
+
+  // Solo mostrar sugerencias si el input tiene focus
+  if (document.activeElement !== metadataFilter) {
+    metadataSuggestions.style.display = 'none';
+    return;
+  }
+
+  const filterLower = (query || '').toLowerCase();
+  metadataSuggestions.innerHTML = '';
+
+  // Actualizar visibilidad del botón de limpiar
+  updateClearButtonVisibility();
+
+  // Si no hay tipos de metadata cargados, no mostrar suggestions
+  if (!metadataTypeNames || metadataTypeNames.length === 0) {
+    metadataSuggestions.style.display = 'none';
+    return;
+  }
+
+  const matches = metadataTypeNames
+    .filter(name => name.toLowerCase().includes(filterLower))
+    .slice(0, 200);
+
+  if (!matches.length) {
+    metadataSuggestions.style.display = 'none';
+    return;
+  }
+
+  matches.forEach(name => {
+    const option = document.createElement('div');
+    option.className = 'metadata-suggestion';
+    option.textContent = name;
+    option.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      metadataFilter.value = name;
+      applyMetadataFilter();
+    });
+    metadataSuggestions.appendChild(option);
+  });
+
+  metadataSuggestions.style.display = 'block';
+}
+
+function updateClearButtonVisibility() {
+  if (clearFilterBtn && metadataFilter) {
+    if (metadataFilter.value.trim()) {
+      clearFilterBtn.classList.add('visible');
+    } else {
+      clearFilterBtn.classList.remove('visible');
+    }
+  }
+}
+
+function clearFilter() {
+  if (metadataFilter) {
+    metadataFilter.value = '';
+    updateClearButtonVisibility();
+    applyMetadataFilter();
+  }
+}
+
+function hideMetadataSuggestions() {
+  if (metadataSuggestions) {
+    metadataSuggestions.style.display = 'none';
+  }
+}
+
+function applyMetadataFilter() {
+  if (treeView && metadataFilter) {
+    treeView.filterMetadataTypes(metadataFilter.value);
+  }
+  hideMetadataSuggestions();
+  updateClearButtonVisibility();
+}
+
+/**
  * Vuelve a la pantalla 1 y limpia todo el estado
  */
 function goBackToScreen1() {
@@ -431,22 +603,19 @@ function goBackToScreen1() {
   const diffViewer = document.getElementById('diffViewer');
   if (diffPanel && diffPanel.classList.contains('visible')) {
     // Destruir el editor ANTES de ocultar el panel
-    import('./diffViewer.js').then(({ destroyDiffViewer }) => {
-      destroyDiffViewer();
-      // Limpiar el contenido después de disponer el editor
+    try {
+      destroyDiffEditor();
       if (diffViewer) {
         diffViewer.innerHTML = '';
       }
-      // Ocultar el panel pero mantener el espacio reservado
       diffPanel.classList.remove('visible');
-    }).catch(err => {
+    } catch (err) {
       console.error('Error destroying diff viewer:', err);
-      // Aun así, limpiar y ocultar pero mantener el espacio reservado
       if (diffViewer) {
         diffViewer.innerHTML = '';
       }
       diffPanel.classList.remove('visible');
-    });
+    }
   }
 
   // Limpiar el estado
@@ -457,17 +626,22 @@ function goBackToScreen1() {
   // Limpiar el filtro
   if (metadataFilter) {
     metadataFilter.value = '';
+    updateClearButtonVisibility();
   }
 
-  // Limpiar el treeview
+  // Limpiar el treeview (preservar el filter-wrapper)
   const treeviewElement = document.getElementById('treeview');
   if (treeviewElement) {
+    const filterWrapper = treeviewElement.querySelector('.filter-wrapper');
     treeviewElement.innerHTML = '';
+    if (filterWrapper) {
+      treeviewElement.appendChild(filterWrapper);
+    }
   }
 
   // Limpiar información de orgs mostrada en pantalla 2
-  orgAInfo.textContent = '';
-  orgBInfo.textContent = '';
+  if (orgAInfo) orgAInfo.textContent = '';
+  if (orgBInfo) orgBInfo.textContent = '';
 
   // NO resetear los selects de orgs - mantener los valores seleccionados
   // para que el usuario pueda volver fácilmente a la pantalla 2 con las mismas orgs
@@ -476,22 +650,51 @@ function goBackToScreen1() {
   errorMessage.style.display = 'none';
 
   // Mostrar pantalla 1 y ocultar pantalla 2
-  screen1.style.display = 'block';
+  screen1.style.display = 'flex';
   screen2.style.display = 'none';
 }
 
 // Event listeners
 continueBtn.addEventListener('click', handleContinue);
-refreshOrgsBtn.addEventListener('click', () => {
-  loadOrgs(true);
+refreshOrgsBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!refreshOrgsBtn.classList.contains('disabled')) {
+    loadOrgs(true);
+  }
 });
 backBtn.addEventListener('click', goBackToScreen1);
 
-// Configurar el filtro de metadata types
+// Configurar el filtro de metadata types (solo aplica al pulsar Enter o seleccionar una opción)
 if (metadataFilter) {
   metadataFilter.addEventListener('input', (e) => {
-    if (treeView) {
-      treeView.filterMetadataTypes(e.target.value);
+    renderMetadataSuggestions(e.target.value);
+  });
+
+  metadataFilter.addEventListener('focus', (e) => {
+    renderMetadataSuggestions(e.target.value);
+  });
+
+  metadataFilter.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyMetadataFilter();
+    }
+  });
+
+  metadataFilter.addEventListener('blur', () => {
+    // Pequeño delay para permitir clicks en las opciones
+    setTimeout(hideMetadataSuggestions, 150);
+  });
+}
+
+// Configurar botón de limpiar filtro
+if (clearFilterBtn) {
+  clearFilterBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearFilter();
+    if (metadataFilter) {
+      metadataFilter.focus();
     }
   });
 }
@@ -504,27 +707,56 @@ if (closeDiffBtn) {
     if (diffPanel) {
       // Destruir el editor de Monaco ANTES de ocultar el panel
       // Esto evita errores de "node to be removed is not a child"
-      import('./diffViewer.js').then(({ destroyDiffViewer }) => {
-        destroyDiffViewer();
-        // Limpiar el contenido después de disponer el editor
+      try {
+        destroyDiffEditor();
         if (diffViewer) {
           diffViewer.innerHTML = '';
         }
-        // Limpiar el textarea de código
-        const orgACodeTextarea = document.getElementById('orgACodeTextarea');
-        if (orgACodeTextarea) {
-          orgACodeTextarea.value = '';
-        }
-        // Ocultar el panel pero mantener el espacio reservado
         diffPanel.classList.remove('visible');
-      }).catch(err => {
+      } catch (err) {
         console.error('Error destroying diff viewer:', err);
-        // Aun así, ocultar el panel pero mantener el espacio reservado
         if (diffViewer) {
           diffViewer.innerHTML = '';
         }
         diffPanel.classList.remove('visible');
-      });
+      }
+    }
+  });
+}
+
+// Configurar toggle para alternar tema del editor
+const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+if (themeToggleBtn) {
+  // Función para actualizar el estado del toggle según el tema
+  function updateToggleState(theme) {
+    if (themeToggleBtn) {
+      // checked = tema claro (vs), unchecked = tema oscuro (vs-dark)
+      themeToggleBtn.checked = theme === 'vs';
+    }
+  }
+
+  // Cargar tema inicial y actualizar toggle
+  (async () => {
+    try {
+      const { getCurrentTheme } = await import('./diffViewer.js');
+      // Si el editor aún no está inicializado, cargar desde localStorage
+      const savedTheme = localStorage.getItem('orgdiff_monaco_theme') || 'vs-dark';
+      updateToggleState(savedTheme);
+    } catch (error) {
+      // Si no se puede cargar, usar el valor por defecto
+      const savedTheme = localStorage.getItem('orgdiff_monaco_theme') || 'vs-dark';
+      updateToggleState(savedTheme);
+    }
+  })();
+
+  themeToggleBtn.addEventListener('change', async () => {
+    try {
+      const { toggleTheme } = await import('./diffViewer.js');
+      const newTheme = toggleTheme();
+      updateToggleState(newTheme);
+    } catch (error) {
+      console.error('Error toggling theme:', error);
     }
   });
 }

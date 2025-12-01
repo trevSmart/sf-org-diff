@@ -1,10 +1,12 @@
+import { initDiffEditor, destroyDiffEditor, scrollDiffToFirstChange } from './diffManager.js';
+
 /**
  * Módulo para gestionar el treeview de metadata types y componentes
  */
 
 /**
  * Crea un indicador de carga animado
- * @param {string} type - Tipo de indicador: 'spinner', 'dots', 'pulse'
+ * @param {string} type - Tipo de indicador: 'spinner', 'dots'
  * @param {string} text - Texto opcional a mostrar junto al indicador
  * @returns {HTMLElement} - Elemento con el indicador de carga
  */
@@ -19,9 +21,6 @@ function createLoadingIndicator(type = 'spinner', text = '') {
   } else if (type === 'dots') {
     indicator = document.createElement('span');
     indicator.className = 'loading-dots';
-  } else if (type === 'pulse') {
-    indicator = document.createElement('span');
-    indicator.className = 'loading-pulse';
   }
 
   if (indicator) {
@@ -46,6 +45,26 @@ export class TreeView {
     this.loadedComponentsByOrg = new Map(); // Cache de componentes separados por org
     this.expandedNodes = new Set(); // Nodos expandidos
     this.componentCounts = new Map(); // Cache de conteos de componentes por metadata type
+    this.componentSymbols = new Map(); // Referencias a los símbolos para actualizarlos tras comparar
+    this.bundleFilesCache = new Map(); // Cache de archivos por componente bundle
+  }
+
+  getBundleTypes() {
+    return new Set([
+      'LightningComponentBundle',
+      'AuraDefinitionBundle',
+      'ExperienceBundle',
+      'LightningBolt',
+      'LightningExperienceTheme',
+      'WaveTemplateBundle',
+      'AnalyticsTemplateBundle'
+    ]);
+  }
+
+  isBundleType(metadataTypeName) {
+    const bundles = this.getBundleTypes();
+    if (bundles.has(metadataTypeName)) return true;
+    return false;
   }
 
   /**
@@ -53,10 +72,30 @@ export class TreeView {
    * @param {Array} metadataTypes - Array de tipos de metadata
    */
   renderMetadataTypes(metadataTypes) {
-    this.container.innerHTML = '';
+    // Preservar el filter-wrapper (que contiene el input y las suggestions)
+    const filterWrapper = this.container.querySelector('.filter-wrapper');
+
+    // Limpiar solo el contenido del treeview (no el filter-wrapper)
+    const treeList = this.container.querySelector('.tree-list');
+    if (treeList) {
+      treeList.remove();
+    }
+
+    // Si no hay tree-list, limpiar todo excepto el filter-wrapper
+    if (!this.container.querySelector('.tree-list')) {
+      const children = Array.from(this.container.children);
+      children.forEach(child => {
+        if (!child.classList.contains('filter-wrapper')) {
+          child.remove();
+        }
+      });
+    }
 
     if (!metadataTypes || metadataTypes.length === 0) {
-      this.container.innerHTML = '<div class="empty-message">No hay tipos de metadata disponibles</div>';
+      const emptyMessage = document.createElement('div');
+      emptyMessage.className = 'empty-message';
+      emptyMessage.textContent = 'No hay tipos de metadata disponibles';
+      this.container.appendChild(emptyMessage);
       return;
     }
 
@@ -94,28 +133,28 @@ export class TreeView {
 
     const nodeContent = document.createElement('div');
     nodeContent.className = 'node-content';
-
-    const expandIcon = document.createElement('span');
-    expandIcon.className = 'expand-icon';
-    expandIcon.textContent = '▶';
-    expandIcon.addEventListener('click', (e) => {
+    // Permitir hacer clic en todo el ancho del node-content para expandir/colapsar
+    nodeContent.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleNode(li, metadataType);
     });
+
+    const expandIcon = document.createElement('i');
+    expandIcon.className = 'expand-icon fas fa-chevron-right';
+    expandIcon.style.userSelect = 'none';
+
+    const folderIcon = document.createElement('i');
+    folderIcon.className = 'fas fa-folder folder-icon';
+    folderIcon.style.userSelect = 'none';
 
     const label = document.createElement('span');
     label.className = 'node-label';
     const metadataTypeName = metadataType.xmlName || metadataType.directoryName;
     // Inicialmente no mostrar conteos, se cargarán cuando se expanda el nodo
     label.innerHTML = `<span class="node-name">${metadataTypeName}</span> <span class="node-counts" data-metadata-type="${metadataType.xmlName}" style="display: none;"></span>`;
-    // Permitir hacer clic en el label para expandir/colapsar
-    label.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleNode(li, metadataType);
-    });
-    label.style.cursor = 'pointer';
 
     nodeContent.appendChild(expandIcon);
+    nodeContent.appendChild(folderIcon);
     nodeContent.appendChild(label);
     li.appendChild(nodeContent);
 
@@ -141,11 +180,11 @@ export class TreeView {
     if (this.expandedNodes.has(metadataTypeName)) {
       // Colapsar
       childrenContainer.style.display = 'none';
-      expandIcon.textContent = '▶';
+      expandIcon.className = 'expand-icon fas fa-chevron-right';
       this.expandedNodes.delete(metadataTypeName);
     } else {
       // Expandir
-      expandIcon.textContent = '▼';
+      expandIcon.className = 'expand-icon fas fa-chevron-down';
       this.expandedNodes.add(metadataTypeName);
 
       // Si el conteo no está cargado, cargarlo ahora cuando se expande el nodo
@@ -156,8 +195,6 @@ export class TreeView {
         );
         if (countsElement) {
           countsElement.innerHTML = '';
-          const loadingIndicator = createLoadingIndicator('pulse');
-          countsElement.appendChild(loadingIndicator);
           countsElement.style.display = 'inline';
         }
         // Cargar el conteo en segundo plano sin bloquear la expansión
@@ -173,7 +210,7 @@ export class TreeView {
         this.renderComponents(childrenContainer, this.loadedComponents.get(metadataTypeName), metadataTypeName);
         childrenContainer.style.display = 'block';
       } else {
-        // Mostrar indicador de carga animado
+        // Mostrar mensaje de carga con spinner
         const loadingLi = document.createElement('li');
         loadingLi.className = 'loading';
         const loadingIndicator = createLoadingIndicator('spinner', 'Cargando componentes');
@@ -331,9 +368,12 @@ export class TreeView {
     }
 
     components.forEach(component => {
+      const name = component.fullName || component.name || component.fileName;
+      const isBundle = this.isBundleType(metadataTypeName);
+
       const li = document.createElement('li');
-      li.className = 'tree-leaf';
-      li.dataset.componentName = component.fullName || component.name || component.fileName;
+      li.className = isBundle ? 'tree-node bundle-node' : 'tree-leaf';
+      li.dataset.componentName = name;
 
       // Crear contenedor para el símbolo y el nombre
       const componentContent = document.createElement('div');
@@ -344,11 +384,6 @@ export class TreeView {
       symbol.className = 'component-symbol';
 
       if (component.inOrgA && component.inOrgB) {
-        // IMPORTANTE: No podemos determinar si son iguales solo con metadatos porque:
-        // - Las fechas pueden ser diferentes pero el contenido idéntico
-        // - Una clase puede crearse en un org y desplegarse meses después a otro
-        // Por lo tanto, mostramos "?" (desconocido) y solo compararemos el contenido
-        // real cuando el usuario haga clic para ver el diff
         symbol.textContent = '?';
         symbol.className += ' symbol-both symbol-unknown';
         symbol.title = 'Haz clic para comparar contenido';
@@ -365,20 +400,48 @@ export class TreeView {
       // Crear span para el nombre
       const nameSpan = document.createElement('span');
       nameSpan.className = 'component-name';
-      const name = component.fullName || component.name || component.fileName;
       nameSpan.textContent = name;
+
+      // Guardar referencia del símbolo para actualizarlo tras comparar
+      const componentKey = this.getComponentKey(metadataTypeName, name);
+      this.componentSymbols.set(componentKey, symbol);
+
+      if (isBundle) {
+        // Bundle: mostrar caret y permitir expandir archivos
+        const expandIcon = document.createElement('span');
+        expandIcon.className = 'expand-icon';
+        expandIcon.textContent = '▶';
+        expandIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleBundleComponent(li, metadataTypeName, name);
+        });
+        componentContent.prepend(expandIcon);
+        componentContent.classList.add('bundle-header');
+      }
 
       componentContent.appendChild(symbol);
       componentContent.appendChild(nameSpan);
       li.appendChild(componentContent);
 
-      // Si el componente está en ambas orgs, hacer clickeable para ver el diff
-      if (component.inOrgA && component.inOrgB) {
-        li.style.cursor = 'pointer';
-        li.addEventListener('click', () => {
-          // Abrir diff para cualquier componente en ambas orgs (igual o diferente)
-          this.openDiffViewer(component, metadataTypeName);
+      if (isBundle) {
+        const childrenContainer = document.createElement('ul');
+        childrenContainer.className = 'tree-children bundle-files';
+        childrenContainer.style.display = 'none';
+        li.appendChild(childrenContainer);
+        li.addEventListener('click', (e) => {
+          // Evitar que hacer clic en el li cause acciones extra si ya se hace en expandIcon
+          if (e.target === li || e.target === componentContent || e.target === nameSpan) {
+            this.toggleBundleComponent(li, metadataTypeName, name);
+          }
         });
+      } else {
+        // Si el componente está en ambas orgs, hacer clickeable para ver el diff
+        if (component.inOrgA && component.inOrgB) {
+          li.style.cursor = 'pointer';
+          li.addEventListener('click', () => {
+            this.openDiffViewer(component, metadataTypeName);
+          });
+        }
       }
 
       container.appendChild(li);
@@ -492,7 +555,7 @@ export class TreeView {
    * @param {Object} component - Componente a comparar
    * @param {string} metadataTypeName - Nombre del tipo de metadata
    */
-  async openDiffViewer(component, metadataTypeName) {
+  async openDiffViewer(component, metadataTypeName, filePath = null) {
     const componentName = component.fullName || component.name || component.fileName;
 
     // Mostrar el panel
@@ -507,21 +570,80 @@ export class TreeView {
 
     // Mostrar el panel - siempre está en el layout, solo cambiamos la visibilidad
     diffPanel.classList.add('visible');
-    diffPanelTitle.textContent = `${metadataTypeName}: ${componentName}`;
 
-    // Actualizar etiquetas de las orgs
+    // Crear icona basada en el component
+    const symbol = document.createElement('span');
+    symbol.className = 'component-symbol';
+
+    if (component.inOrgA && component.inOrgB) {
+      // Si està a ambdues orgs, mostrar icona "?" (desconegut) o la icona actualitzada
+      // Primer comprovem si ja tenim l'estat del símbol guardat
+      const componentKey = this.getComponentKey(metadataTypeName, componentName);
+      const existingSymbol = this.componentSymbols.get(componentKey);
+
+      if (existingSymbol) {
+        // Copiar les classes de l'icona existent
+        symbol.className = existingSymbol.className;
+        symbol.textContent = existingSymbol.textContent;
+      } else {
+        symbol.textContent = '?';
+        symbol.className += ' symbol-both symbol-unknown';
+      }
+    } else if (component.inOrgA) {
+      symbol.textContent = 'A';
+      symbol.className += ' symbol-org-a';
+    } else if (component.inOrgB) {
+      symbol.textContent = 'B';
+      symbol.className += ' symbol-org-b';
+    }
+
+    // Netejar el títol i afegir la icona
+    diffPanelTitle.innerHTML = '';
+    diffPanelTitle.appendChild(symbol);
+
+    // Crear elements separats per al tipus de metadata i el nom del component
+    const metadataTypeSpan = document.createElement('span');
+    metadataTypeSpan.className = 'diff-title-metadata-type';
+    metadataTypeSpan.textContent = metadataTypeName;
+
+    const separatorSpan = document.createTextNode(': ');
+
+    const componentNameSpan = document.createElement('span');
+    componentNameSpan.className = 'diff-title-component-name';
+    componentNameSpan.textContent = componentName;
+
+    diffPanelTitle.appendChild(document.createTextNode(' '));
+    diffPanelTitle.appendChild(metadataTypeSpan);
+    diffPanelTitle.appendChild(separatorSpan);
+    diffPanelTitle.appendChild(componentNameSpan);
+
+    // Si hi ha filePath, afegir-lo també
+    if (filePath) {
+      const filePathSpan = document.createElement('span');
+      filePathSpan.className = 'diff-title-file-path';
+      filePathSpan.textContent = ' / ' + filePath;
+      diffPanelTitle.appendChild(filePathSpan);
+    }
+
+    // Actualizar etiquetas de las orgs (mantener las icones A y B)
     const diffLabelA = document.getElementById('diffLabelA');
     const diffLabelB = document.getElementById('diffLabelB');
-    if (diffLabelA) diffLabelA.textContent = `Org A: ${this.orgAliasA}`;
-    if (diffLabelB) diffLabelB.textContent = `Org B: ${this.orgAliasB}`;
+    const labelTextA = diffLabelA?.querySelector('.diff-label-text');
+    const labelTextB = diffLabelB?.querySelector('.diff-label-text');
+    if (labelTextA) labelTextA.textContent = `${this.orgAliasA}`;
+    if (labelTextB) labelTextB.textContent = `${this.orgAliasB}`;
+
+    // Asegurar altura visible para el contenedor del diff
+    if (diffViewer) {
+      diffViewer.style.minHeight = '420px';
+      diffViewer.style.height = '420px';
+    }
 
     // Destruir el editor anterior si existe antes de limpiar el container
     // Esto evita errores de "node to be removed is not a child"
     try {
-      const { destroyDiffViewer } = await import('./diffViewer.js');
-      destroyDiffViewer();
+      destroyDiffEditor();
     } catch (err) {
-      // Ignorar errores al destruir el editor anterior
       console.warn('Error destroying previous diff viewer:', err);
     }
 
@@ -533,49 +655,270 @@ export class TreeView {
     diffViewer.innerHTML = '';
     diffViewer.appendChild(loadingDiv);
 
-    // Limpiar el textarea mientras se carga
-    const orgACodeTextarea = document.getElementById('orgACodeTextarea');
-    if (orgACodeTextarea) {
-      orgACodeTextarea.value = '';
-    }
 
     // Hacer la carga asíncrona sin bloquear la UI
     try {
       // Obtener contenido de ambas orgs
       const [responseA, responseB] = await Promise.all([
-        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`),
-        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`)
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`),
+        fetch(`/api/component-content/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}${filePath ? `?file=${encodeURIComponent(filePath)}` : ''}`)
       ]);
 
       const dataA = await responseA.json();
       const dataB = await responseB.json();
 
       if (dataA.success && dataB.success) {
-        // Inicializar Monaco Editor diff viewer
-        const { initDiffViewer } = await import('./diffViewer.js');
-
         // Determinar el lenguaje según el tipo de metadata
         const language = this.getLanguageForMetadataType(metadataTypeName);
 
-        // Mostrar contenido: Org A a la izquierda, Org B a la derecha
-        await initDiffViewer('diffViewer', dataA.content, dataB.content, language);
+        // Esperar a que el panel esté completamente visible y tenga dimensiones
+        // Usar requestAnimationFrame para asegurar que el layout se haya actualizado
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-        // Mostrar el código de la Org A en el textarea
-        const orgACodeTextarea = document.getElementById('orgACodeTextarea');
-        if (orgACodeTextarea) {
-          orgACodeTextarea.value = dataA.content;
+        // Verificar que el panel tiene dimensiones antes de inicializar el editor
+        const panelRect = diffPanel.getBoundingClientRect();
+        if (panelRect.width === 0 || panelRect.height === 0) {
+          // Si aún no tiene dimensiones, esperar un poco más
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        // Mostrar contenido: Org A a la izquierda, Org B a la derecha
+        await initDiffEditor('diffViewer', dataA.content, dataB.content, language);
+
+        // Actualizar toggle del tema después de inicializar el editor
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        if (themeToggleBtn) {
+          // Solo aplicable a Monaco; per altres editors, mantenim l'estat actual
+          try {
+            const { getCurrentTheme } = await import('./diffViewer.js');
+            const currentTheme = getCurrentTheme();
+            themeToggleBtn.checked = currentTheme === 'vs';
+          } catch (_err) {
+            // ignore
+          }
+        }
+
+        // Actualizar símbolo según igualdad/diferencia del contenido
+        const areEqual = dataA.content === dataB.content;
+        this.updateComponentSymbol(metadataTypeName, componentName, areEqual ? 'equal' : 'different');
+
+        // Actualizar la icona del títol amb el símbol correcte
+        this.updateTitleSymbol(diffPanelTitle, metadataTypeName, componentName, areEqual);
+
+        // Si hay diferencias, hacer scroll automático a la primera diferencia
+        if (!areEqual) {
+          // Esperar un poco para asegurar que el editor está completamente renderizado
+          setTimeout(() => {
+            try {
+              scrollDiffToFirstChange();
+            } catch (err) {
+              console.warn('Error scrolling diff:', err);
+            }
+          }, 200);
         }
       } else {
         const errorMsg = dataA.error || dataB.error || 'Error desconocido';
         const fullErrorMsg = `Error al cargar el contenido: ${errorMsg}`;
         diffViewer.innerHTML = '';
         diffViewer.appendChild(this.createErrorElement(fullErrorMsg));
+        this.updateComponentSymbol(metadataTypeName, componentName, 'error');
       }
     } catch (error) {
       console.error('Error opening diff viewer:', error);
       const fullErrorMsg = `Error al abrir el visor de diferencias: ${error.message}`;
       diffViewer.innerHTML = '';
       diffViewer.appendChild(this.createErrorElement(fullErrorMsg));
+      this.updateComponentSymbol(metadataTypeName, componentName, 'error');
+    }
+  }
+
+  getComponentKey(metadataTypeName, componentName) {
+    return `${metadataTypeName}::${componentName}`;
+  }
+
+  async toggleBundleComponent(node, metadataTypeName, componentName) {
+    const expandIcon = node.querySelector('.expand-icon');
+    const childrenContainer = node.querySelector('.bundle-files');
+    if (!childrenContainer || !expandIcon) return;
+
+    const isOpen = childrenContainer.style.display === 'block';
+
+    if (isOpen) {
+      childrenContainer.style.display = 'none';
+      expandIcon.textContent = '▶';
+      return;
+    }
+
+    expandIcon.textContent = '▼';
+    childrenContainer.innerHTML = '';
+
+    // Mostrar loading
+    const loadingLi = document.createElement('li');
+    loadingLi.className = 'loading';
+    loadingLi.textContent = 'Cargando archivos...';
+    childrenContainer.appendChild(loadingLi);
+    childrenContainer.style.display = 'block';
+
+    try {
+      const filesData = await this.loadBundleFiles(metadataTypeName, componentName);
+      this.renderBundleFiles(childrenContainer, filesData, metadataTypeName, componentName);
+    } catch (error) {
+      console.error('Error loading bundle files:', error);
+      childrenContainer.innerHTML = '';
+      const errorLi = document.createElement('li');
+      errorLi.className = 'error';
+      errorLi.textContent = 'Error carregant els fitxers del bundle';
+      childrenContainer.appendChild(errorLi);
+    }
+  }
+
+  async loadBundleFiles(metadataTypeName, componentName) {
+    const key = this.getComponentKey(metadataTypeName, componentName);
+    if (this.bundleFilesCache.has(key)) {
+      return this.bundleFilesCache.get(key);
+    }
+
+    const [respA, respB] = await Promise.all([
+      fetch(`/api/bundle-files/${encodeURIComponent(this.orgAliasA)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`),
+      fetch(`/api/bundle-files/${encodeURIComponent(this.orgAliasB)}/${encodeURIComponent(metadataTypeName)}/${encodeURIComponent(componentName)}`)
+    ]);
+
+    const dataA = await respA.json();
+    const dataB = await respB.json();
+
+    if (!dataA.success || !dataB.success) {
+      throw new Error(dataA.error || dataB.error || 'Error carregant fitxers');
+    }
+
+    const filesA = dataA.files || [];
+    const filesB = dataB.files || [];
+    const unionMap = new Map();
+
+    filesA.forEach(f => {
+      unionMap.set(f, { path: f, inOrgA: true, inOrgB: false });
+    });
+    filesB.forEach(f => {
+      if (unionMap.has(f)) {
+        unionMap.set(f, { ...unionMap.get(f), inOrgB: true });
+      } else {
+        unionMap.set(f, { path: f, inOrgA: false, inOrgB: true });
+      }
+    });
+
+    const unionFiles = Array.from(unionMap.values()).sort((a, b) => a.path.localeCompare(b.path));
+    const result = { filesA, filesB, unionFiles };
+    this.bundleFilesCache.set(key, result);
+    return result;
+  }
+
+  renderBundleFiles(container, filesData, metadataTypeName, componentName) {
+    container.innerHTML = '';
+    if (!filesData.unionFiles.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No s\'han trobat fitxers';
+      container.appendChild(li);
+      return;
+    }
+
+    filesData.unionFiles.forEach(file => {
+      const li = document.createElement('li');
+      li.className = 'tree-leaf bundle-file';
+
+      const content = document.createElement('div');
+      content.className = 'component-content';
+
+      const symbol = document.createElement('span');
+      symbol.className = 'component-symbol';
+      if (file.inOrgA && file.inOrgB) {
+        symbol.textContent = '⇄';
+        symbol.classList.add('symbol-both');
+        symbol.title = 'Fitxer a ambdues orgs';
+      } else if (file.inOrgA) {
+        symbol.textContent = 'A';
+        symbol.classList.add('symbol-org-a');
+        symbol.title = 'Només a Org A';
+      } else if (file.inOrgB) {
+        symbol.textContent = 'B';
+        symbol.classList.add('symbol-org-b');
+        symbol.title = 'Només a Org B';
+      }
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'component-name';
+      nameSpan.textContent = file.path;
+
+      content.appendChild(symbol);
+      content.appendChild(nameSpan);
+      li.appendChild(content);
+
+      if (file.inOrgA && file.inOrgB) {
+        li.style.cursor = 'pointer';
+        li.addEventListener('click', () => {
+          this.openDiffViewer({
+            fullName: componentName,
+            inOrgA: true,
+            inOrgB: true
+          }, metadataTypeName, file.path);
+        });
+      }
+
+      container.appendChild(li);
+    });
+  }
+
+  updateComponentSymbol(metadataTypeName, componentName, status) {
+    const key = this.getComponentKey(metadataTypeName, componentName);
+    const symbol = this.componentSymbols.get(key);
+    if (!symbol) return;
+
+    symbol.className = 'component-symbol symbol-both';
+
+    if (status === 'equal') {
+      symbol.textContent = '=';
+      symbol.classList.add('symbol-equal');
+      symbol.title = 'Igual en ambas orgs';
+    } else if (status === 'different') {
+      symbol.textContent = '!';
+      symbol.classList.add('symbol-different');
+      symbol.title = 'Diferente entre orgs';
+    } else if (status === 'error') {
+      symbol.textContent = '?';
+      symbol.classList.add('symbol-error');
+      symbol.title = 'Error al comparar';
+    } else {
+      symbol.textContent = '?';
+      symbol.classList.add('symbol-unknown');
+      symbol.title = 'Haz clic para comparar contenido';
+    }
+  }
+
+  /**
+   * Actualiza la icona del títol del diff panel quan se detectan diferencias
+   * @param {HTMLElement} titleElement - Elemento del título
+   * @param {string} metadataTypeName - Nombre del tipo de metadata
+   * @param {string} componentName - Nombre del componente
+   * @param {boolean} areEqual - Si el contenido es igual o diferente
+   */
+  updateTitleSymbol(titleElement, metadataTypeName, componentName, areEqual) {
+    if (!titleElement) return;
+
+    // Buscar el símbol actual en el títol
+    const existingSymbol = titleElement.querySelector('.component-symbol');
+    if (!existingSymbol) return;
+
+    // Actualizar el símbol según si son iguales o diferentes
+    existingSymbol.className = 'component-symbol symbol-both';
+
+    if (areEqual) {
+      existingSymbol.textContent = '=';
+      existingSymbol.classList.add('symbol-equal');
+      existingSymbol.title = 'Igual en ambas orgs';
+    } else {
+      existingSymbol.textContent = '!';
+      existingSymbol.classList.add('symbol-different');
+      existingSymbol.title = 'Diferente entre orgs';
     }
   }
 
@@ -752,16 +1095,56 @@ export class TreeView {
       `.node-counts[data-metadata-type="${metadataTypeName}"]`
     );
 
-    if (countsElement) {
-      countsElement.textContent = `A: ${countA} B: ${countB}`;
-      // Mostrar el elemento cuando se actualiza el conteo
+    if (!countsElement) return;
+
+    // Convertir a números si són strings o altres valors
+    const numA = typeof countA === 'number' ? countA : (countA === '...' ? -1 : parseInt(countA) || 0);
+    const numB = typeof countB === 'number' ? countB : (countB === '...' ? -1 : parseInt(countB) || 0);
+
+    // Si ambdós comptadors són 0, no mostrar el recompte i aplicar estil gris clar
+    if (numA === 0 && numB === 0) {
+      countsElement.style.display = 'none';
+      // Aplicar classe per fer el nom més gris clar
+      const nodeElement = countsElement.closest('.tree-node');
+      if (nodeElement) {
+        const nodeName = nodeElement.querySelector('.node-name');
+        if (nodeName) {
+          nodeName.classList.add('node-empty');
+        }
+      }
+    } else {
+      // Si hi ha ítems o està carregant, mostrar el recompte en format "0 / 3" amb colors
+      countsElement.innerHTML = '';
+
+      const countASpan = document.createElement('span');
+      countASpan.className = 'count-org-a';
+      countASpan.textContent = countA;
+
+      const separator = document.createTextNode(' / ');
+
+      const countBSpan = document.createElement('span');
+      countBSpan.className = 'count-org-b';
+      countBSpan.textContent = countB;
+
+      countsElement.appendChild(countASpan);
+      countsElement.appendChild(separator);
+      countsElement.appendChild(countBSpan);
+
       countsElement.style.display = 'inline';
+      const nodeElement = countsElement.closest('.tree-node');
+      if (nodeElement) {
+        const nodeName = nodeElement.querySelector('.node-name');
+        if (nodeName) {
+          nodeName.classList.remove('node-empty');
+        }
+      }
     }
   }
 
   /**
    * Filtra los nodos de metadata types según el texto de búsqueda
    * @param {string} filterText - Texto para filtrar
+   * @returns {number} - Número de nodos visibles después del filtro
    */
   filterMetadataTypes(filterText) {
     const filterLower = filterText.toLowerCase().trim();
@@ -772,10 +1155,11 @@ export class TreeView {
       allNodes.forEach(node => {
         node.style.display = '';
       });
-      return;
+      return allNodes.length;
     }
 
     // Filtrar nodos
+    let visibleCount = 0;
     allNodes.forEach(node => {
       const _label = node.querySelector('.node-label');
       const nodeName = node.querySelector('.node-name');
@@ -783,9 +1167,43 @@ export class TreeView {
 
       if (nodeText.includes(filterLower)) {
         node.style.display = '';
+        visibleCount++;
       } else {
         node.style.display = 'none';
       }
     });
+
+    return visibleCount;
+  }
+
+  /**
+   * Expande automáticamente el único nodo visible si solo hay uno
+   */
+  autoExpandSingleVisibleNode() {
+    const allNodes = this.container.querySelectorAll('.tree-node');
+    const visibleNodes = Array.from(allNodes).filter(
+      node => {
+        const style = window.getComputedStyle(node);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }
+    );
+
+    if (visibleNodes.length === 1) {
+      const node = visibleNodes[0];
+      const metadataTypeName = node.dataset.metadataType;
+
+      if (metadataTypeName && !this.expandedNodes.has(metadataTypeName)) {
+        // Crear objeto metadataType con la información necesaria
+        const metadataType = {
+          xmlName: metadataTypeName,
+          directoryName: node.dataset.directoryName
+        };
+
+        // Expandir el nodo automáticamente
+        this.toggleNode(node, metadataType).catch(err => {
+          console.warn('Error expanding node automatically:', err);
+        });
+      }
+    }
   }
 }

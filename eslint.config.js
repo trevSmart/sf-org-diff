@@ -25,7 +25,7 @@ export default [
   },
   {
     // Backend files (Node.js)
-    files: ['src/**/*.js'],
+    files: ['src/**/*.js', 'scripts/**/*.js'],
     languageOptions: {
       globals: {
         ...globals.node

@@ -8,10 +8,10 @@ NC='\033[0m' # No Color
 
 echo -e "${YELLOW}Deteniendo procesos anteriores...${NC}"
 
-# Función para matar procesos en el puerto 3000
+# Función para matar procesos en el puerto 3200
 kill_port_processes() {
-  local port=3000
-  # Buscar PIDs que estén usando el puerto 3000
+  local port=3200
+  # Buscar PIDs que estén usando el puerto 3200
   local pids=$(lsof -ti :$port 2>/dev/null)
 
   if [ -n "$pids" ]; then
@@ -23,7 +23,7 @@ kill_port_processes() {
   return 1
 }
 
-# Matar procesos que usan el puerto 3000
+# Matar procesos que usan el puerto 3200
 kill_port_processes
 
 # También matar procesos de node que ejecuten server.js (por si acaso)
@@ -33,20 +33,20 @@ pkill -f "node.*server.js" 2>/dev/null
 # Esperar un momento para asegurar que los procesos se hayan terminado
 sleep 2
 
-# Verificar si aún hay procesos usando el puerto 3000
-if lsof -ti :3000 > /dev/null 2>&1; then
-  echo -e "${RED}Advertencia: El puerto 3000 aún está en uso. Intentando forzar...${NC}"
-  lsof -ti :3000 | xargs kill -9 2>/dev/null
+# Verificar si aún hay procesos usando el puerto 3200
+if lsof -ti :3200 > /dev/null 2>&1; then
+  echo -e "${RED}Advertencia: El puerto 3200 aún está en uso. Intentando forzar...${NC}"
+  lsof -ti :3200 | xargs kill -9 2>/dev/null
   sleep 1
 fi
 
 # Verificación final
-if lsof -ti :3000 > /dev/null 2>&1; then
-  echo -e "${RED}Error: No se pudo liberar el puerto 3000${NC}"
-  echo -e "${YELLOW}Por favor, detén manualmente los procesos que usan el puerto 3000${NC}"
+if lsof -ti :3200 > /dev/null 2>&1; then
+  echo -e "${RED}Error: No se pudo liberar el puerto 3200${NC}"
+  echo -e "${YELLOW}Por favor, detén manualmente los procesos que usan el puerto 3200${NC}"
   exit 1
 else
-  echo -e "${GREEN}Puerto 3000 liberado correctamente${NC}"
+  echo -e "${GREEN}Puerto 3200 liberado correctamente${NC}"
 fi
 
 echo -e "${YELLOW}Iniciando servidor...${NC}"
@@ -58,7 +58,7 @@ SERVER_PID=$!
 # Esperar a que el servidor esté listo (máximo 10 segundos)
 echo -e "${YELLOW}Esperando a que el servidor esté listo...${NC}"
 for i in {1..10}; do
-  if curl -s http://localhost:3000 > /dev/null 2>&1; then
+  if curl -s http://localhost:3200 > /dev/null 2>&1; then
     echo -e "${GREEN}Servidor iniciado correctamente (PID: $SERVER_PID)${NC}"
     break
   fi
@@ -72,7 +72,7 @@ done
 
 # Abrir Chrome con la aplicación
 echo -e "${YELLOW}Abriendo Chrome...${NC}"
-open -a "Google Chrome" http://localhost:3000
+open -a "Google Chrome" http://localhost:3200
 
 echo -e "${GREEN}✓ Aplicación iniciada y Chrome abierto${NC}"
 echo -e "${YELLOW}Para detener el servidor, ejecuta: kill $SERVER_PID${NC}"

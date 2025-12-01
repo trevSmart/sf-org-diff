@@ -7,17 +7,26 @@ import {
   getMetadataTypes,
   listMetadataComponents,
   compareMetadataComponent,
-  retrieveMetadataComponent
+  retrieveMetadataComponent,
+  listBundleFiles
 } from './services/salesforce.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3200;
+const MONACO_DIR = join(__dirname, '..', 'node_modules', 'monaco-editor', 'min');
+const FONTAWESOME_DIR = join(__dirname, '..', 'node_modules', '@fortawesome', 'fontawesome-free');
 
 // Middleware para parsear JSON
 app.use(express.json({ limit: '100mb' })); // Aumentar límite de JSON
+
+// Servir Monaco Editor localmente para evitar dependencias de CDN y problemas de red
+app.use('/monaco', express.static(MONACO_DIR));
+
+// Servir Font Awesome localmente
+app.use('/fontawesome', express.static(FONTAWESOME_DIR));
 
 // Endpoint para obtener la lista de orgs
 app.get('/api/orgs', async (req, res) => {
@@ -105,13 +114,15 @@ app.get('/api/component-content/:orgAlias/:metadataType/:componentName', async (
   let orgAlias;
   let metadataType;
   let componentName;
+  let filePath;
 
   try {
     orgAlias = decodeURIComponent(req.params.orgAlias);
     metadataType = decodeURIComponent(req.params.metadataType);
     componentName = decodeURIComponent(req.params.componentName);
+    filePath = req.query.file ? decodeURIComponent(req.query.file) : null;
 
-    const content = await retrieveMetadataComponent(metadataType, componentName, orgAlias);
+    const content = await retrieveMetadataComponent(metadataType, componentName, orgAlias, filePath);
     res.json({ success: true, content });
   } catch (error) {
     const errorOrgAlias = orgAlias || req.params.orgAlias;
@@ -149,6 +160,31 @@ app.get('/api/compare/:orgAliasA/:orgAliasB/:metadataType/:componentName', async
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to compare component'
+    });
+  }
+});
+
+// Endpoint para obtener los archivos de un componente tipo bundle
+app.get('/api/bundle-files/:orgAlias/:metadataType/:componentName', async (req, res) => {
+  let orgAlias;
+  let metadataType;
+  let componentName;
+
+  try {
+    orgAlias = decodeURIComponent(req.params.orgAlias);
+    metadataType = decodeURIComponent(req.params.metadataType);
+    componentName = decodeURIComponent(req.params.componentName);
+
+    const files = await listBundleFiles(metadataType, componentName, orgAlias);
+    res.json({ success: true, files });
+  } catch (error) {
+    const errorOrgAlias = orgAlias || req.params.orgAlias;
+    const errorMetadataType = metadataType || req.params.metadataType;
+    const errorComponentName = componentName || req.params.componentName;
+    console.error(`Error getting bundle files for ${errorComponentName} (${errorMetadataType}) from org ${errorOrgAlias}:`, error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get bundle files'
     });
   }
 });

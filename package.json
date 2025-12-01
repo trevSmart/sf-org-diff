@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
+    "prestart": "node scripts/kill-existing.js",
     "start": "node src/server.js",
+    "predev": "node scripts/kill-existing.js",
     "dev": "node --watch src/server.js",
     "start:app": "./scripts/start.sh",
     "lint": "eslint .",
@@ -20,6 +22,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
     "express": "^4.18.2",
     "monaco-editor": "^0.45.0"
   },
