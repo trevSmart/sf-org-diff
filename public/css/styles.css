@@ -1063,6 +1063,20 @@ h2 {
   margin-top: 4px;
 }
 
+.bundle-node {
+  padding: 6px 12px;
+  padding-left: 26px;
+  font-size: 13px;
+  color: #666;
+  cursor: default;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.bundle-node:hover {
+  background-color: #f8f8f8;
+}
+
 .bundle-node > .component-content {
   display: flex;
   gap: 8px;
