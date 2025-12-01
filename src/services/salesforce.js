@@ -731,6 +731,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     // Filter zip entries to only include actual file paths with content
     // Exclude directory entries (ending with /) and validate they have expected structure
     const zipEntries = zip.getEntries()
+      .filter(entry => !entry.isDirectory)
       .map(entry => entry.entryName)
       .filter(entry => {
         // Must have a path separator, not end with / (directories), and not be empty
@@ -748,7 +749,11 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
 
     // Extract the content of the matched entry as UTF-8 string
     // Salesforce metadata files are always UTF-8 encoded text
-    const content = zip.readAsText(candidateEntry, 'utf8');
+    const entry = zip.getEntry(candidateEntry);
+    if (!entry) {
+      throw new Error(`Entry ${candidateEntry} not found in zip file`);
+    }
+    const content = zip.readAsText(entry, 'utf8');
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
