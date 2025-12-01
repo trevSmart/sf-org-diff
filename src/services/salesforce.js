@@ -629,7 +629,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       `--target-org "${orgAlias}"`,
       `--zip-file "${zipPath}"`,
       '--single-package',
-      '--wait 120'
+      '--wait 240'
     ].join(' ');
 
     console.log(`[SF CLI] Executing: ${retrieveCommand}`);
