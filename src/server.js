@@ -18,6 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 3200;
 const MONACO_DIR = join(__dirname, '..', 'node_modules', 'monaco-editor', 'min');
 const FONTAWESOME_DIR = join(__dirname, '..', 'node_modules', '@fortawesome', 'fontawesome-free');
+const NODE_MODULES_DIR = join(__dirname, '..', 'node_modules');
 
 // Middleware para parsear JSON
 app.use(express.json({ limit: '100mb' })); // Aumentar límite de JSON
@@ -27,6 +28,9 @@ app.use('/monaco', express.static(MONACO_DIR));
 
 // Servir Font Awesome localmente
 app.use('/fontawesome', express.static(FONTAWESOME_DIR));
+
+// Servir CodeMirror y sus dependencias desde node_modules para evitar problemas con CDN
+app.use('/node_modules', express.static(NODE_MODULES_DIR));
 
 // Endpoint para obtener la lista de orgs
 app.get('/api/orgs', async (req, res) => {
