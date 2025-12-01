@@ -37,7 +37,9 @@ build/
 tmp/
 temp/
 
-.sf/
-.sfdx/
+.sf/*
+.sfdx/*
 force-app/
 sfdx-project.json
+.sf/config.json
+.sfdx/sfdx-config.json
