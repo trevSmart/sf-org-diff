@@ -4,6 +4,7 @@ import { readFile, mkdir, rm, readdir } from 'fs/promises';
 import { join, relative, sep as pathSeparator } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import AdmZip from 'adm-zip';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -636,6 +637,27 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
 }
 
 /**
+ * Validates that a metadata identifier (type or component name) is safe to use in CLI commands.
+ * Prevents command injection by rejecting dangerous characters.
+ * @param {string} identifier - The metadata type or component name to validate
+ * @param {string} identifierName - Name of the identifier for error messages
+ * @throws {Error} If the identifier contains invalid characters
+ */
+function validateMetadataIdentifier(identifier, identifierName) {
+  // Allow alphanumeric, underscores, hyphens, and dots only
+  // Spaces are NOT allowed to prevent argument splitting in command execution
+  // Reject shell metacharacters that could enable command injection
+  const safePattern = /^[a-zA-Z0-9_\-.]+$/;
+  if (!identifier || !safePattern.test(identifier)) {
+    throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
+  }
+  // Explicitly reject path traversal attempts (consecutive dots)
+  if (identifier.includes('..')) {
+    throw new Error(`Invalid ${identifierName}: path traversal not allowed`);
+  }
+}
+
+/**
  * Validates that an org alias is safe to use in CLI commands.
  * Org aliases can contain spaces (they are quoted in commands), but we still need to
  * prevent command injection by rejecting dangerous shell metacharacters.
@@ -702,17 +724,15 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       cwd: PROJECT_ROOT
     });
 
-    // Use unzip -Z1 for more reliable parsing (one filename per line, no formatting)
-    const { stdout: zipList } = await execFileAsync('unzip', ['-Z1', zipPath], {
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 120000
-    });
-
+    // Use adm-zip for cross-platform zip handling instead of shell unzip command
+    // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
+    const zip = new AdmZip(zipPath);
+    
     // Filter zip entries to only include actual file paths with content
     // Exclude directory entries (ending with /) and validate they have expected structure
-    const zipEntries = zipList
-      .split('\n')
-      .map(line => line.trim())
+    const zipEntries = zip.getEntries()
+      .filter(entry => !entry.isDirectory)
+      .map(entry => entry.entryName)
       .filter(entry => {
         // Must have a path separator, not end with / (directories), and not be empty
         return entry && entry.includes('/') && !entry.endsWith('/');
@@ -727,11 +747,13 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       );
     }
 
-    // Use execFileAsync with array of arguments to avoid command injection
-    const { stdout: content } = await execFileAsync('unzip', ['-p', zipPath, candidateEntry], {
-      maxBuffer: 100 * 1024 * 1024,
-      timeout: 120000
-    });
+    // Extract the content of the matched entry as UTF-8 string
+    // Salesforce metadata files are always UTF-8 encoded text
+    const entry = zip.getEntry(candidateEntry);
+    if (!entry) {
+      throw new Error(`Entry ${candidateEntry} not found in zip file`);
+    }
+    const content = zip.readAsText(entry, 'utf8');
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
