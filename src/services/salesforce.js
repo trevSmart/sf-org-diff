@@ -616,9 +616,10 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
  * @throws {Error} If the identifier contains invalid characters
  */
 function validateMetadataIdentifier(identifier, identifierName) {
-  // Allow alphanumeric, underscores, hyphens, dots, and spaces (for component names)
+  // Allow alphanumeric, underscores, hyphens, and dots only
+  // Spaces are NOT allowed to prevent argument splitting in command execution
   // Reject shell metacharacters that could enable command injection
-  const safePattern = /^[a-zA-Z0-9_\-. ]+$/;
+  const safePattern = /^[a-zA-Z0-9_\-.]+$/;
   if (!identifier || !safePattern.test(identifier)) {
     throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
   }
@@ -672,17 +673,22 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       timeout: 120000
     });
 
+    // Filter zip entries to only include actual file paths with content
+    // Exclude directory entries (ending with /) and validate they have expected structure
     const zipEntries = zipList
       .split('\n')
       .map(line => line.trim())
-      .filter(entry => entry && entry.includes('/'));
+      .filter(entry => {
+        // Must have a path separator, not end with / (directories), and not be empty
+        return entry && entry.includes('/') && !entry.endsWith('/');
+      });
 
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
     if (!candidateEntry) {
-      const sampleEntries = zipEntries.slice(0, 5).join(', ');
+      // Only show the count of entries, not the actual paths which could expose sensitive info
       throw new Error(
-        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries; sample: ${sampleEntries})`
+        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries)`
       );
     }
 
