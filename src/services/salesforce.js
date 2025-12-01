@@ -12,6 +12,33 @@ const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '../../');
 const TMP_DIR = join(PROJECT_ROOT, 'tmp');
 
+// Salesforce API version used for Tooling API requests
+// Update this when newer API features are needed
+const SF_API_VERSION = 'v61.0';
+
+/**
+ * Mapping of metadata types to their Tooling API object names and body field
+ * These types support fast content retrieval via Tooling API instead of using sf project retrieve
+ * 
+ * The Tooling API approach is significantly faster than sf project retrieve because:
+ * 1. It directly queries the API without any file system operations
+ * 2. It returns the body content directly in the response JSON
+ * 3. No temp directories need to be created or cleaned up
+ * 
+ * For non-code metadata types (like LWC bundles, permission sets, etc.), we fall back
+ * to the traditional sf project retrieve method.
+ * 
+ * Reference: Salesforce VS Code extensions use a similar approach via @salesforce/source-deploy-retrieve
+ * but for code-only diffs, the Tooling API is optimal.
+ * See: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/
+ */
+const TOOLING_API_TYPES = {
+  'ApexClass': { object: 'ApexClass', bodyField: 'Body' },
+  'ApexTrigger': { object: 'ApexTrigger', bodyField: 'Body' },
+  'ApexPage': { object: 'ApexPage', bodyField: 'Markup' },
+  'ApexComponent': { object: 'ApexComponent', bodyField: 'Markup' }
+};
+
 /**
  * Ejecuta un comando de Salesforce CLI
  * @param {string} command - Comando CLI a ejecutar (sin --target-org)
@@ -25,6 +52,9 @@ export async function runCliCommand(command, orgAlias = null) {
   if (orgAlias) {
     fullCommand = `${command} --target-org "${orgAlias}"`;
   }
+
+  // Log the CLI command being executed
+  console.log(`[SF CLI] Executing: ${fullCommand}`);
 
   try {
     // Aumentar el maxBuffer significativamente para manejar respuestas muy grandes (100MB)
@@ -110,6 +140,224 @@ export async function validateOrg(orgAlias) {
 }
 
 /**
+ * Gets the access token and instance URL for an org using sf org display
+ * This is used for making direct API calls to Salesforce
+ * @param {string} orgAlias - Alias of the org
+ * @returns {Promise<{accessToken: string, instanceUrl: string}>} - Access token and instance URL
+ */
+async function getOrgConnection(orgAlias) {
+  const result = await runCliCommand('sf org display --json', orgAlias);
+
+  if (!result.result || !result.result.accessToken || !result.result.instanceUrl) {
+    throw new Error(`Could not get connection details for org ${orgAlias}`);
+  }
+
+  return {
+    accessToken: result.result.accessToken,
+    instanceUrl: result.result.instanceUrl
+  };
+}
+
+/**
+ * Escapes a string for use in a SOQL query to prevent injection attacks
+ * @param {string} value - The value to escape
+ * @returns {string} - The escaped value safe for SOQL
+ */
+function escapeSoql(value) {
+  if (!value) return '';
+  // Escape single quotes by doubling them (SOQL standard)
+  // Also escape backslashes which could be used for escaping
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Queries the Salesforce Tooling API to retrieve component content directly
+ * This is much faster than using sf project retrieve as it doesn't create temp directories
+ * Note: Uses native fetch which requires Node.js 18+
+ * @param {string} orgAlias - Alias of the org
+ * @param {string} objectName - Tooling API object name (e.g., 'ApexClass', 'ApexTrigger')
+ * @param {string} componentName - Name of the component to retrieve
+ * @param {string} bodyField - Field name containing the body/content (e.g., 'Body', 'Markup')
+ * @returns {Promise<string>} - The content of the component
+ */
+async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
+  const { accessToken, instanceUrl } = await getOrgConnection(orgAlias);
+
+  // Escape the component name to prevent SOQL injection
+  const escapedComponentName = escapeSoql(componentName);
+
+  // Build the SOQL query to get the component body
+  // For ApexClass and ApexTrigger, filter by NamespacePrefix = NULL and Status = 'Active' 
+  // to exclude managed package components and inactive/deleted components
+  let query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${escapedComponentName}'`;
+  if (objectName === 'ApexClass' || objectName === 'ApexTrigger') {
+    query += " AND NamespacePrefix = NULL AND Status = 'Active'";
+  }
+  const encodedQuery = encodeURIComponent(query);
+
+  // Make the Tooling API request using the access token
+  const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
+
+  // Log the Tooling API call
+  console.log(`[Tooling API] GET ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Tooling API request failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.records || data.records.length === 0) {
+    throw new Error(`Component ${componentName} not found in org ${orgAlias}`);
+  }
+
+  const content = data.records[0][bodyField];
+  if (content === null || content === undefined) {
+    throw new Error(`Component ${componentName} has no content in org ${orgAlias}`);
+  }
+
+  return content;
+}
+
+/**
+ * Checks if a metadata type supports fast retrieval via Tooling API
+ * @param {string} metadataType - The metadata type to check
+ * @returns {boolean} - True if the type supports Tooling API retrieval
+ */
+function supportsToolingApi(metadataType) {
+  return Object.prototype.hasOwnProperty.call(TOOLING_API_TYPES, metadataType);
+}
+
+/**
+ * Lists ApexClass components using Tooling API with proper filters
+ * Filters by NamespacePrefix = NULL (org's own classes) and Status = 'Active'
+ * Includes LengthWithoutComments for quick diff comparison between orgs
+ * @param {string} orgAlias - Alias of the org
+ * @returns {Promise<Array>} - Array of ApexClass components with basic metadata
+ */
+async function listApexClassesViaToolingApi(orgAlias) {
+  const { accessToken, instanceUrl } = await getOrgConnection(orgAlias);
+
+  // Query for ApexClass components that are:
+  // - Not from a managed package (NamespacePrefix = NULL)
+  // - Active (Status = 'Active')
+  // Include LengthWithoutComments for quick diff comparison
+  const query = "SELECT Id, Name, NamespacePrefix, Status, LastModifiedDate, CreatedDate, LengthWithoutComments FROM ApexClass WHERE NamespacePrefix = NULL AND Status = 'Active' ORDER BY Name";
+  const encodedQuery = encodeURIComponent(query);
+
+  const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
+
+  // Log the Tooling API call
+  console.log(`[Tooling API] GET ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Tooling API request failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.records) {
+    return [];
+  }
+
+  // Map the Tooling API response to match the expected component format
+  return data.records.map(record => ({
+    fullName: record.Name,
+    type: 'ApexClass',
+    id: record.Id,
+    lastModifiedDate: record.LastModifiedDate,
+    createdDate: record.CreatedDate,
+    lengthWithoutComments: record.LengthWithoutComments
+  }));
+}
+
+/**
+ * Lists ApexTrigger components using Tooling API with proper filters
+ * Filters by NamespacePrefix = NULL (org's own triggers) and Status = 'Active'
+ * Includes LengthWithoutComments for quick diff comparison between orgs
+ * @param {string} orgAlias - Alias of the org
+ * @returns {Promise<Array>} - Array of ApexTrigger components with basic metadata
+ */
+async function listApexTriggersViaToolingApi(orgAlias) {
+  const { accessToken, instanceUrl } = await getOrgConnection(orgAlias);
+
+  // Query for ApexTrigger components that are:
+  // - Not from a managed package (NamespacePrefix = NULL)
+  // - Active (Status = 'Active')
+  // Include LengthWithoutComments for quick diff comparison
+  const query = "SELECT Id, Name, NamespacePrefix, Status, LastModifiedDate, CreatedDate, LengthWithoutComments FROM ApexTrigger WHERE NamespacePrefix = NULL AND Status = 'Active' ORDER BY Name";
+  const encodedQuery = encodeURIComponent(query);
+
+  const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
+
+  // Log the Tooling API call
+  console.log(`[Tooling API] GET ${apiUrl}`);
+
+  const response = await fetch(apiUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Tooling API request failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.records) {
+    return [];
+  }
+
+  // Map the Tooling API response to match the expected component format
+  return data.records.map(record => ({
+    fullName: record.Name,
+    type: 'ApexTrigger',
+    id: record.Id,
+    lastModifiedDate: record.LastModifiedDate,
+    createdDate: record.CreatedDate,
+    lengthWithoutComments: record.LengthWithoutComments
+  }));
+}
+
+/**
+ * Retrieves component content using Tooling API (fast method)
+ * @param {string} metadataType - Type of metadata
+ * @param {string} componentName - Name of the component
+ * @param {string} orgAlias - Alias of the org
+ * @returns {Promise<string>} - The content of the component
+ */
+async function retrieveViaToolingApi(metadataType, componentName, orgAlias) {
+  const config = TOOLING_API_TYPES[metadataType];
+  if (!config) {
+    throw new Error(`Metadata type ${metadataType} does not support Tooling API retrieval`);
+  }
+
+  return queryToolingApi(orgAlias, config.object, componentName, config.bodyField);
+}
+
+/**
  * Obtiene todos los tipos de metadata disponibles en una org
  * @param {string} orgAlias - Alias de la org
  * @returns {Promise<Array>} - Array de tipos de metadata
@@ -149,12 +397,37 @@ function isThirdPartyComponent(component) {
 /**
  * Lista los componentes de un tipo de metadata específico (solo nombres, sin contenido)
  * Filtra automáticamente los componentes de paquetes de terceros (con namespace prefix)
+ * For ApexClass and ApexTrigger, uses Tooling API with NamespacePrefix = NULL and Status = 'Active' filters
+ * Also includes LengthWithoutComments for quick diff comparison between orgs
  * @param {string} metadataType - Tipo de metadata (ej: "ApexClass")
  * @param {string} orgAlias - Alias de la org
  * @returns {Promise<Array>} - Array de componentes con metadatos básicos (sin componentes de terceros)
  */
 export async function listMetadataComponents(metadataType, orgAlias) {
   try {
+    // For ApexClass, use Tooling API for faster listing with proper filters
+    if (metadataType === 'ApexClass') {
+      try {
+        console.log(`Using Tooling API for fast listing of ApexClass components from ${orgAlias}`);
+        return await listApexClassesViaToolingApi(orgAlias);
+      } catch (toolingError) {
+        console.warn(`Tooling API listing failed for ApexClass in ${orgAlias}, falling back to CLI: ${toolingError.message}`);
+        // Fall through to the traditional method
+      }
+    }
+
+    // For ApexTrigger, use Tooling API for faster listing with proper filters
+    if (metadataType === 'ApexTrigger') {
+      try {
+        console.log(`Using Tooling API for fast listing of ApexTrigger components from ${orgAlias}`);
+        return await listApexTriggersViaToolingApi(orgAlias);
+      } catch (toolingError) {
+        console.warn(`Tooling API listing failed for ApexTrigger in ${orgAlias}, falling back to CLI: ${toolingError.message}`);
+        // Fall through to the traditional method
+      }
+    }
+
+    // Traditional method using sf org list metadata command
     // Escapar el metadataType para evitar problemas con caracteres especiales
     const escapedMetadataType = metadataType.replace(/"/g, '\\"');
     const result = await runCliCommand(`sf org list metadata --metadata-type "${escapedMetadataType}" --json`, orgAlias);
@@ -217,15 +490,44 @@ export async function listMetadataComponents(metadataType, orgAlias) {
 
 /**
  * Recupera el contenido completo de un componente específico
+ * Uses Tooling API for supported types (fast) or falls back to sf project retrieve (slow)
  * @param {string} metadataType - Tipo de metadata
  * @param {string} componentName - Nombre del componente
  * @param {string} orgAlias - Alias de la org
+ * @param {string} filePath - Optional file path for bundles
  * @returns {Promise<string>} - Contenido completo del componente
  */
 export async function retrieveMetadataComponent(metadataType, componentName, orgAlias, filePath = null) {
   if (filePath && filePath.includes('..')) {
     throw new Error('Invalid file path');
   }
+
+  // For simple metadata types without filePath, try the fast Tooling API approach first
+  if (!filePath && supportsToolingApi(metadataType)) {
+    try {
+      console.log(`Using Tooling API for fast retrieval of ${metadataType}:${componentName} from ${orgAlias}`);
+      return await retrieveViaToolingApi(metadataType, componentName, orgAlias);
+    } catch (toolingError) {
+      console.warn(`Tooling API retrieval failed for ${metadataType}:${componentName}, falling back to sf project retrieve: ${toolingError.message}`);
+      // Fall through to the traditional method
+    }
+  }
+
+  // Fall back to the traditional sf project retrieve method
+  // This is used for bundles (with filePath) or unsupported metadata types
+  return retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath);
+}
+
+/**
+ * Retrieves component content using sf project retrieve (traditional method)
+ * This is slower but works for all metadata types
+ * @param {string} metadataType - Type of metadata
+ * @param {string} componentName - Name of the component
+ * @param {string} orgAlias - Alias of the org
+ * @param {string} filePath - Optional file path for bundles
+ * @returns {Promise<string>} - The content of the component
+ */
+async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath = null) {
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
@@ -240,6 +542,9 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     // El flag correcto es --output-dir, no --target-dir
     const retrieveCommand = `sf project retrieve start --metadata ${metadataType}:${componentName} --output-dir "${retrieveDir}" --target-org "${orgAlias}"`;
     const fullCommand = retrieveCommand;
+
+    // Log the CLI command being executed
+    console.log(`[SF CLI] Executing: ${fullCommand}`);
 
     await execAsync(fullCommand, {
       maxBuffer: 100 * 1024 * 1024, // 100MB
@@ -383,6 +688,10 @@ export async function listBundleFiles(metadataType, componentName, orgAlias) {
       '--target-org',
       orgAlias
     ];
+
+    // Log the CLI command being executed
+    console.log(`[SF CLI] Executing: sf ${args.join(' ')}`);
+
     await execFileAsync('sf', args, {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 300000,
