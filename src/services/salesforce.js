@@ -184,7 +184,12 @@ async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
   const escapedComponentName = escapeSoql(componentName);
 
   // Build the SOQL query to get the component body
-  const query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${escapedComponentName}'`;
+  // For ApexClass, filter by NamespacePrefix = NULL and Status = 'Active' to exclude
+  // managed package classes and inactive/deleted classes
+  let query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${escapedComponentName}'`;
+  if (objectName === 'ApexClass') {
+    query += " AND NamespacePrefix = NULL AND Status = 'Active'";
+  }
   const encodedQuery = encodeURIComponent(query);
 
   // Make the Tooling API request using the access token
@@ -224,6 +229,52 @@ async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
  */
 function supportsToolingApi(metadataType) {
   return Object.prototype.hasOwnProperty.call(TOOLING_API_TYPES, metadataType);
+}
+
+/**
+ * Lists ApexClass components using Tooling API with proper filters
+ * Filters by NamespacePrefix = NULL (org's own classes) and Status = 'Active'
+ * @param {string} orgAlias - Alias of the org
+ * @returns {Promise<Array>} - Array of ApexClass components with basic metadata
+ */
+async function listApexClassesViaToolingApi(orgAlias) {
+  const { accessToken, instanceUrl } = await getOrgConnection(orgAlias);
+
+  // Query for ApexClass components that are:
+  // - Not from a managed package (NamespacePrefix = NULL)
+  // - Active (Status = 'Active')
+  const query = "SELECT Id, Name, NamespacePrefix, Status, LastModifiedDate, CreatedDate FROM ApexClass WHERE NamespacePrefix = NULL AND Status = 'Active' ORDER BY Name";
+  const encodedQuery = encodeURIComponent(query);
+
+  const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
+
+  const response = await fetch(apiUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Tooling API request failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.records) {
+    return [];
+  }
+
+  // Map the Tooling API response to match the expected component format
+  return data.records.map(record => ({
+    fullName: record.Name,
+    type: 'ApexClass',
+    id: record.Id,
+    lastModifiedDate: record.LastModifiedDate,
+    createdDate: record.CreatedDate
+  }));
 }
 
 /**
@@ -282,12 +333,25 @@ function isThirdPartyComponent(component) {
 /**
  * Lista los componentes de un tipo de metadata específico (solo nombres, sin contenido)
  * Filtra automáticamente los componentes de paquetes de terceros (con namespace prefix)
+ * For ApexClass, uses Tooling API with NamespacePrefix = NULL and Status = 'Active' filters
  * @param {string} metadataType - Tipo de metadata (ej: "ApexClass")
  * @param {string} orgAlias - Alias de la org
  * @returns {Promise<Array>} - Array de componentes con metadatos básicos (sin componentes de terceros)
  */
 export async function listMetadataComponents(metadataType, orgAlias) {
   try {
+    // For ApexClass, use Tooling API for faster listing with proper filters
+    if (metadataType === 'ApexClass') {
+      try {
+        console.log(`Using Tooling API for fast listing of ApexClass components from ${orgAlias}`);
+        return await listApexClassesViaToolingApi(orgAlias);
+      } catch (toolingError) {
+        console.warn(`Tooling API listing failed for ApexClass in ${orgAlias}, falling back to CLI: ${toolingError.message}`);
+        // Fall through to the traditional method
+      }
+    }
+
+    // Traditional method using sf org list metadata command
     // Escapar el metadataType para evitar problemas con caracteres especiales
     const escapedMetadataType = metadataType.replace(/"/g, '\\"');
     const result = await runCliCommand(`sf org list metadata --metadata-type "${escapedMetadataType}" --json`, orgAlias);
