@@ -4,7 +4,7 @@ import { setActiveDiffEditorType, getActiveDiffEditorType, destroyDiffEditor } f
 
 // Constantes
 const STORAGE_KEY = 'orgdiff_orgs_list';
-const DEV_MODE = false; // Cambiar a false para producción
+const DEV_MODE = true; // Cambiar a false para producción
 
 // Estado de la aplicación
 let selectedOrgA = null;
@@ -33,6 +33,10 @@ const backBtn = document.getElementById('backBtn');
 const closeDiffBtn = document.getElementById('closeDiffBtn');
 const toggleTreeviewBtn = document.getElementById('toggleTreeviewBtn');
 const mainContent = document.querySelector('.main-content');
+const reviewChangesBtn = document.getElementById('reviewChangesBtn');
+const reviewChangesModal = document.getElementById('reviewChangesModal');
+const reviewChangesContent = document.getElementById('reviewChangesContent');
+const closeReviewChangesBtn = document.getElementById('closeReviewChangesBtn');
 const metadataTypesWarning = document.getElementById('metadataTypesWarning');
 const devModeIndicator = document.getElementById('devModeIndicator');
 let metadataTypeNames = [];
@@ -904,6 +908,79 @@ if (toggleTreeviewBtn && mainContent) {
       icon.className = collapsed ? 'fas fa-expand' : 'fas fa-columns';
     }
   });
+}
+
+// Obrir/ tancar modal de "Review changes"
+function openReviewChangesModal() {
+  if (!reviewChangesModal || !reviewChangesContent) return;
+
+  // Buscar tots els components marcats com a resolts al treeview
+  const resolvedElements = document.querySelectorAll('.tree-leaf.component-resolved, .bundle-node.component-resolved');
+
+  if (!resolvedElements.length) {
+    reviewChangesContent.innerHTML = '<p class="empty-message">Encara no hi ha cap component modificat.</p>';
+  } else {
+    const items = [];
+    resolvedElements.forEach((el) => {
+      const nameEl = el.querySelector('.component-name');
+      const node = el.closest('.tree-node[data-metadata-type]');
+      const typeName = node ? node.dataset.metadataType : '';
+      const compName = nameEl ? nameEl.textContent : '';
+      if (typeName && compName) {
+        items.push({ type: typeName, name: compName });
+      }
+    });
+
+    items.sort((a, b) => {
+      const t = a.type.localeCompare(b.type);
+      return t !== 0 ? t : a.name.localeCompare(b.name);
+    });
+
+    const ul = document.createElement('ul');
+    items.forEach(({ type, name }) => {
+      const li = document.createElement('li');
+      const badge = document.createElement('span');
+      badge.className = 'badge-type';
+      badge.textContent = type;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'item-name';
+      nameSpan.textContent = name;
+      li.appendChild(badge);
+      li.appendChild(nameSpan);
+      ul.appendChild(li);
+    });
+
+    reviewChangesContent.innerHTML = '';
+    reviewChangesContent.appendChild(ul);
+  }
+
+  reviewChangesModal.style.display = 'flex';
+}
+
+function closeReviewChangesModal() {
+  if (!reviewChangesModal) return;
+  reviewChangesModal.style.display = 'none';
+}
+
+if (reviewChangesBtn && reviewChangesModal) {
+  reviewChangesBtn.addEventListener('click', () => {
+    openReviewChangesModal();
+  });
+}
+
+if (closeReviewChangesBtn) {
+  closeReviewChangesBtn.addEventListener('click', () => {
+    closeReviewChangesModal();
+  });
+}
+
+if (reviewChangesModal) {
+  const backdrop = reviewChangesModal.querySelector('.modal-backdrop');
+  if (backdrop) {
+    backdrop.addEventListener('click', () => {
+      closeReviewChangesModal();
+    });
+  }
 }
 
 // Configurar toggle para alternar tema del editor

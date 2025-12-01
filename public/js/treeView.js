@@ -1102,8 +1102,12 @@ export class TreeView {
     if (!symbol) return;
 
     const componentItem = symbol.closest('.tree-leaf, .bundle-node');
+    const parentNode = symbol.closest('.tree-node[data-metadata-type]');
     if (componentItem) {
       componentItem.classList.remove('component-resolved');
+    }
+    if (parentNode) {
+      parentNode.classList.remove('node-has-resolved');
     }
 
     symbol.className = 'component-symbol symbol-both';
@@ -1122,6 +1126,14 @@ export class TreeView {
       symbol.title = 'Modificado: contenido de Org B actualizado desde Org A';
       if (componentItem) {
         componentItem.classList.add('component-resolved');
+      }
+      if (parentNode) {
+        parentNode.classList.add('node-has-resolved');
+      }
+      // Activar el botó de "Review changes" quan hi hagi almenys un element modificat
+      const reviewBtn = document.getElementById('reviewChangesBtn');
+      if (reviewBtn) {
+        reviewBtn.disabled = false;
       }
     } else if (status === 'error') {
       symbol.textContent = '?';

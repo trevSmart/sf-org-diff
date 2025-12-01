@@ -91,6 +91,13 @@ body {
   text-transform: uppercase;
 }
 
+.global-theme-toggle {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  z-index: 9000;
+}
+
 .container {
   max-width: 1600px;
   margin: 0 auto;
@@ -445,6 +452,45 @@ h2 {
 .org-info .btn-icon-toggle-treeview {
   position: absolute;
   left: 16px;
+}
+
+.btn-review-changes {
+  position: absolute;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d0d0d0;
+  background-color: #f7f7f7;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+
+.btn-review-changes[disabled] {
+  opacity: 0.5;
+  cursor: default;
+  background-color: #f3f3f3;
+  border-color: #e0e0e0;
+  color: #999;
+  pointer-events: none;
+}
+
+.btn-review-changes i {
+  font-size: 13px;
+}
+
+.btn-review-changes:hover {
+  background-color: #eaf5ff;
+  border-color: #3498db;
+  color: #1f5f8b;
+}
+
+.btn-review-changes:active {
+  transform: scale(0.97);
 }
 
 .org-info-item {
@@ -1237,6 +1283,145 @@ h2 {
   font-weight: 600;
 }
 
+.node-has-resolved .node-name {
+  color: #ff9800;
+  font-weight: 600;
+}
+
+/* Modal Review changes */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.35);
+}
+
+.modal-dialog {
+  position: relative;
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.modal-body {
+  padding: 10px 16px 16px;
+  overflow-y: auto;
+}
+
+.modal-content-body {
+  font-size: 13px;
+  color: #333;
+}
+
+.modal-footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-modal-secondary,
+.btn-modal-primary {
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.1s;
+}
+
+.btn-modal-secondary {
+  background-color: #f4f4f4;
+  color: #555;
+  border-color: #d0d0d0;
+}
+
+.btn-modal-secondary:hover {
+  background-color: #e9e9e9;
+}
+
+.btn-modal-primary {
+  background-color: #3498db;
+  color: #ffffff;
+  border-color: #2c81ba;
+}
+
+.btn-modal-primary:hover {
+  background-color: #2980b9;
+  border-color: #22709f;
+}
+
+.btn-modal-secondary:active,
+.btn-modal-primary:active {
+  transform: scale(0.97);
+}
+
+.modal-content-body ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.modal-content-body li {
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-content-body li:last-child {
+  border-bottom: none;
+}
+
+.modal-content-body .badge-type {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: #ecf5ff;
+  color: #1f5f8b;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.modal-content-body .item-name {
+  font-weight: 500;
+}
+
+.modal-content-body .item-path {
+  font-size: 11px;
+  color: #777;
+}
+
 .symbol-unknown {
   background-color: #ffc107;
   color: #000;
@@ -1248,6 +1433,35 @@ h2 {
   background-color: #95a5a6;
   color: white;
   border-radius: 50%;
+}
+
+/* CodeMirror theming based on global theme */
+.orgdiff-theme-dark .cm-editor {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.orgdiff-theme-dark .cm-gutters {
+  background-color: #1e1e1e;
+  color: #8dc2ff;
+}
+
+.orgdiff-theme-dark .cm-activeLine {
+  background-color: #2a2a2a;
+}
+
+.orgdiff-theme-light .cm-editor {
+  background-color: #ffffff;
+  color: #1e1e1e;
+}
+
+.orgdiff-theme-light .cm-gutters {
+  background-color: #ffffff;
+  color: #237893;
+}
+
+.orgdiff-theme-light .cm-activeLine {
+  background-color: #f0f7ff;
 }
 
 .symbol-org-a {

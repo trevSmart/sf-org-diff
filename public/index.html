@@ -46,6 +46,13 @@
         <i class="fas fa-code"></i>
         <span>DEV MODE</span>
     </div>
+    <!-- Toggle global de tema clar/fosc -->
+    <div class="global-theme-toggle">
+        <label class="theme-toggle-switch" title="Alternar tema claro/oscuro">
+            <input type="checkbox" id="themeToggleBtn">
+            <span class="theme-toggle-slider"></span>
+        </label>
+    </div>
     <!-- Pantalla 1: Selección de Orgs -->
     <div id="screen1" class="screen">
         <div class="container">
@@ -119,6 +126,10 @@
                     <span class="component-symbol symbol-org-b">B</span>
                     <span id="orgBInfo"></span>
                 </div>
+                <button id="reviewChangesBtn" class="btn-review-changes" type="button" disabled>
+                    <i class="fas fa-list-check"></i>
+                    <span>Review changes</span>
+                </button>
             </div>
             <div id="metadataTypesWarning" class="warning-message" style="display: none;"></div>
             <div class="main-content">
@@ -157,10 +168,6 @@
                     <div class="diff-panel-header">
                         <h2 id="diffPanelTitle">Comparación de Componente</h2>
                         <div class="diff-panel-actions">
-                            <label class="theme-toggle-switch" title="Alternar tema claro/oscuro">
-                                <input type="checkbox" id="themeToggleBtn">
-                                <span class="theme-toggle-slider"></span>
-                            </label>
                             <button id="closeDiffBtn" class="btn-icon-close" title="Cerrar">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -182,6 +189,32 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal per revisar canvis -->
+    <div id="reviewChangesModal" class="modal-overlay" style="display: none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h2>Review changes</h2>
+                <button id="closeReviewChangesBtn" class="btn-icon-close" type="button" title="Tancar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="reviewChangesContent" class="modal-content-body">
+                    <!-- Llista d'elements modificats es genera dinàmicament -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="closeReviewChangesBtn" class="btn-modal-secondary">
+                    Close
+                </button>
+                <button type="button" id="deployChangesBtn" class="btn-modal-primary">
+                    Deploy
+                </button>
             </div>
         </div>
     </div>

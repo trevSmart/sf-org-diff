@@ -5,7 +5,7 @@
 
 let monacoEditor = null;
 let resizeObserver = null;
-let currentTheme = 'vs-dark'; // Default theme
+let currentTheme = 'vs-dark'; // Default, will be overridden by saved theme when available
 
 const MONACO_LOCAL_BASE = '/monaco/vs';
 const MONACO_CDN_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs';
@@ -30,6 +30,17 @@ function loadSavedTheme() {
     return 'vs-dark';
   }
 }
+
+function applyDocumentThemeClass(theme) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.classList.remove('orgdiff-theme-light', 'orgdiff-theme-dark');
+  root.classList.add(theme === 'vs' ? 'orgdiff-theme-light' : 'orgdiff-theme-dark');
+}
+
+// Inicialitzar el tema global (Monaco + CodeMirror) a partir del valor desat
+currentTheme = loadSavedTheme();
+applyDocumentThemeClass(currentTheme);
 
 /**
  * Guarda el tema en localStorage
@@ -407,6 +418,9 @@ export function toggleTheme() {
   // Guardar preferencia
   saveTheme(currentTheme);
 
+  // Aplicar també la classe global per CodeMirror / UI
+  applyDocumentThemeClass(currentTheme);
+
   return currentTheme;
 }
 
@@ -431,6 +445,7 @@ export function setTheme(theme) {
   if (!monacoEditor) {
     currentTheme = theme;
     saveTheme(theme);
+    applyDocumentThemeClass(currentTheme);
     return;
   }
 
@@ -448,6 +463,7 @@ export function setTheme(theme) {
 
   applyContainerBackground(monacoEditor.getContainerDomNode(), currentTheme);
   saveTheme(currentTheme);
+  applyDocumentThemeClass(currentTheme);
 }
 
 /**
