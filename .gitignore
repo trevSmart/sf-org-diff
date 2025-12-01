@@ -42,3 +42,4 @@ temp/
 .sfdx/
 force-app/
 sfdx-project.json
+dev/
