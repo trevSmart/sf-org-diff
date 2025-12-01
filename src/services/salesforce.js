@@ -20,15 +20,15 @@ const SF_API_VERSION = 'v61.0';
 /**
  * Mapping of metadata types to their Tooling API object names and body field
  * These types support fast content retrieval via Tooling API instead of using sf project retrieve
- * 
+ *
  * The Tooling API approach is significantly faster than sf project retrieve because:
  * 1. It directly queries the API without any file system operations
  * 2. It returns the body content directly in the response JSON
  * 3. No temp directories need to be created or cleaned up
- * 
+ *
  * For non-code metadata types (like LWC bundles, permission sets, etc.), we fall back
  * to the traditional sf project retrieve method.
- * 
+ *
  * Reference: Salesforce VS Code extensions use a similar approach via @salesforce/source-deploy-retrieve
  * but for code-only diffs, the Tooling API is optimal.
  * See: https://developer.salesforce.com/docs/atlas.en-us.api_tooling.meta/api_tooling/
@@ -188,7 +188,7 @@ async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
   const escapedComponentName = escapeSoql(componentName);
 
   // Build the SOQL query to get the component body
-  // For ApexClass and ApexTrigger, filter by NamespacePrefix = NULL and Status = 'Active' 
+  // For ApexClass and ApexTrigger, filter by NamespacePrefix = NULL and Status = 'Active'
   // to exclude managed package components and inactive/deleted components
   let query = `SELECT Id, Name, ${bodyField} FROM ${objectName} WHERE Name = '${escapedComponentName}'`;
   if (objectName === 'ApexClass' || objectName === 'ApexTrigger') {
@@ -709,7 +709,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
 
     // Use execFileAsync with array of arguments to avoid shell injection
     const sfArgs = [
-      'metadata', 'retrieve', 'start',
+      'retrieve', 'metadata',
       '--metadata', `${metadataType}:${componentName}`,
       '--target-org', orgAlias,
       '--zip-file', zipPath,
@@ -727,7 +727,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     // Use adm-zip for cross-platform zip handling instead of shell unzip command
     // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
     const zip = new AdmZip(zipPath);
-    
+
     // Filter zip entries to only include actual file paths with content
     // Exclude directory entries (ending with /) and validate they have expected structure
     const zipEntries = zip.getEntries()
