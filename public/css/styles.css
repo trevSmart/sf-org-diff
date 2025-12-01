@@ -1049,6 +1049,53 @@ h2 {
   white-space: nowrap;
 }
 
+.compare-all-btn {
+  background-color: transparent;
+  border: none;
+  padding: 4px 6px;
+  margin-right: 6px;
+  cursor: pointer;
+  color: #666;
+  font-size: 12px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.compare-all-btn:hover {
+  background-color: #f0f0f0;
+  color: #3498db;
+  opacity: 1;
+}
+
+.compare-all-btn:active {
+  transform: scale(0.95);
+}
+
+.compare-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.compare-all-btn.comparing {
+  opacity: 1;
+  color: #e74c3c;
+  background-color: #fee;
+}
+
+.compare-all-btn.comparing:hover {
+  background-color: #fcc;
+  color: #c0392b;
+}
+
+.compare-all-btn i {
+  font-size: 12px;
+}
+
 .count-org-a {
   color: #7fb3d3;
 }

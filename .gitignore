@@ -42,4 +42,6 @@ temp/
 .sfdx/
 force-app/
 sfdx-project.json
+
+# Development files
 dev/
