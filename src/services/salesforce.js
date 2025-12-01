@@ -1,13 +1,12 @@
-import { execFile } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
 import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '../../');
