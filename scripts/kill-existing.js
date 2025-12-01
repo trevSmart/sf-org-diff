@@ -14,10 +14,20 @@ const __dirname = dirname(__filename);
 
 const PORT = process.env.PORT || 3200;
 
+// Validate that port is a number to prevent command injection
+function validatePort(port) {
+  const numPort = parseInt(port, 10);
+  if (isNaN(numPort) || numPort < 1 || numPort > 65535 || String(numPort) !== String(port)) {
+    throw new Error(`Invalid port: ${port}`);
+  }
+  return numPort;
+}
+
 function killPortProcesses(port) {
+  const validPort = validatePort(port);
   try {
     // Buscar PIDs que usen el puerto
-    const pids = execSync(`lsof -ti :${port}`, { encoding: 'utf-8', stdio: 'pipe' }).trim();
+    const pids = execSync(`lsof -ti :${validPort}`, { encoding: 'utf-8', stdio: 'pipe' }).trim();
 
     if (pids) {
       console.log(`Encontrados procesos usando el puerto ${port}: ${pids}`);

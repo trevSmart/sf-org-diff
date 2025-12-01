@@ -3,7 +3,7 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
-import { join, relative } from 'path';
+import { join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
@@ -13,6 +13,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '../../');
 const TMP_DIR = join(PROJECT_ROOT, 'tmp');
+
+/**
+ * Validates that a path is safely contained within a base directory
+ * @param {string} basePath - The base directory that the path must be within
+ * @param {string} filePath - The file path to validate
+ * @returns {string} - The resolved safe path
+ * @throws {Error} - If the path would escape the base directory
+ */
+function validatePathWithinBase(basePath, filePath) {
+  const resolvedBase = resolve(basePath);
+  const resolvedPath = resolve(basePath, filePath);
+
+  if (!resolvedPath.startsWith(resolvedBase)) {
+    throw new Error('Invalid file path: path traversal detected');
+  }
+
+  return resolvedPath;
+}
 
 /**
  * Ejecuta un comando de Salesforce CLI
@@ -225,8 +243,14 @@ export async function listMetadataComponents(metadataType, orgAlias) {
  * @returns {Promise<string>} - Contenido completo del componente
  */
 export async function retrieveMetadataComponent(metadataType, componentName, orgAlias, filePath = null) {
-  if (filePath && filePath.includes('..')) {
-    throw new Error('Invalid file path');
+  // Validate filePath to prevent path traversal attacks
+  if (filePath) {
+    // Decode any URL-encoded sequences first
+    const decodedPath = decodeURIComponent(filePath);
+    // Check for path traversal patterns
+    if (decodedPath.includes('..') || decodedPath.includes('\0')) {
+      throw new Error('Invalid file path');
+    }
   }
   // Crear directorio temporal si no existe
   try {
@@ -254,14 +278,16 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     let content;
 
     if (filePath) {
-      const candidate = join(retrieveDir, filePath);
+      // Validate that the resolved path stays within retrieveDir
+      const safePath = validatePathWithinBase(retrieveDir, filePath);
       try {
-        content = await readFile(candidate, 'utf-8');
+        content = await readFile(safePath, 'utf-8');
       } catch (_err) {
         // Intentar localizar la carpeta del componente y leer relativo a ella
         const componentFolder = await findComponentFolder(retrieveDir, componentName);
         if (componentFolder) {
-          content = await readFile(join(componentFolder, filePath), 'utf-8');
+          const safeComponentPath = validatePathWithinBase(componentFolder, filePath);
+          content = await readFile(safeComponentPath, 'utf-8');
         }
       }
     }
