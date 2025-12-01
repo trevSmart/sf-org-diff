@@ -726,6 +726,67 @@ h2 {
   height: 100%;
 }
 
+/* CodeMirror Merge View - Revert Controls (Conflict Resolution) */
+.diff-viewer .cm-mergeViewRevert {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 4px 2px;
+  background-color: transparent;
+}
+
+.cm-revert-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 11px;
+}
+
+.cm-revert-control-btn:hover {
+  background-color: #3498db;
+  border-color: #3498db;
+  color: white;
+  transform: scale(1.1);
+}
+
+.cm-revert-control-btn:active {
+  transform: scale(0.95);
+}
+
+.cm-revert-control-btn i {
+  font-size: 10px;
+}
+
+/* Highlight the gutter for changed lines */
+.diff-viewer .cm-mergeView .cm-changedLine {
+  background-color: rgba(255, 235, 59, 0.1);
+}
+
+/* Style for collapsed unchanged sections */
+.diff-viewer .cm-mergeView .cm-collapsedLines {
+  color: #666;
+  font-style: italic;
+  padding: 4px 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.diff-viewer .cm-mergeView .cm-collapsedLines:hover {
+  background-color: #e8e8e8;
+}
+
 .org-code-container {
   display: flex;
   flex-direction: row;
