@@ -290,6 +290,7 @@ export class TreeView {
 
   /**
    * Une los componentes de ambas orgs sin duplicados
+   * For ApexClass and ApexTrigger, compares lengthWithoutComments to detect differences
    * @param {Array} componentsA - Componentes de la org A
    * @param {Array} componentsB - Componentes de la org B
    * @returns {Array} - Array con la unión sin duplicados
@@ -297,33 +298,51 @@ export class TreeView {
   unionComponents(componentsA, componentsB) {
     const componentMap = new Map();
 
+    // Create a map of org B components for quick lookup
+    const orgBMap = new Map();
+    componentsB.forEach(component => {
+      const key = component.fullName || component.name || component.fileName;
+      if (key) {
+        orgBMap.set(key, component);
+      }
+    });
+
     // Agregar componentes de la org A
     componentsA.forEach(component => {
       const key = component.fullName || component.name || component.fileName;
       if (key) {
+        const orgBComponent = orgBMap.get(key);
+        const inBothOrgs = !!orgBComponent;
+        
+        // Check for differences using lengthWithoutComments (for ApexClass and ApexTrigger)
+        let hasDifferences = false;
+        if (inBothOrgs && component.lengthWithoutComments !== undefined && orgBComponent.lengthWithoutComments !== undefined) {
+          hasDifferences = component.lengthWithoutComments !== orgBComponent.lengthWithoutComments;
+        }
+
         componentMap.set(key, {
           ...component,
           inOrgA: true,
-          inOrgB: false
+          inOrgB: inBothOrgs,
+          hasDifferences,
+          lengthWithoutCommentsA: component.lengthWithoutComments,
+          lengthWithoutCommentsB: inBothOrgs ? orgBComponent.lengthWithoutComments : undefined
         });
       }
     });
 
-    // Agregar o actualizar componentes de la org B
+    // Agregar componentes que solo están en org B
     componentsB.forEach(component => {
       const key = component.fullName || component.name || component.fileName;
-      if (key) {
-        if (componentMap.has(key)) {
-          // Ya existe, marcar que está en ambas orgs
-          componentMap.get(key).inOrgB = true;
-        } else {
-          // No existe, agregarlo
-          componentMap.set(key, {
-            ...component,
-            inOrgA: false,
-            inOrgB: true
-          });
-        }
+      if (key && !componentMap.has(key)) {
+        componentMap.set(key, {
+          ...component,
+          inOrgA: false,
+          inOrgB: true,
+          hasDifferences: false,
+          lengthWithoutCommentsA: undefined,
+          lengthWithoutCommentsB: component.lengthWithoutComments
+        });
       }
     });
 
@@ -391,14 +410,28 @@ export class TreeView {
       const componentContent = document.createElement('div');
       componentContent.className = 'component-content';
 
-      // Crear símbolo según en qué orgs está
+      // Crear símbolo según en qué orgs está y si hay diferencias detectadas
       const symbol = document.createElement('span');
       symbol.className = 'component-symbol';
 
       if (component.inOrgA && component.inOrgB) {
-        symbol.textContent = '?';
-        symbol.className += ' symbol-both symbol-unknown';
-        symbol.title = 'Haz clic para comparar contenido';
+        // Component exists in both orgs - check if we detected differences via lengthWithoutComments
+        if (component.hasDifferences) {
+          // Differences detected via lengthWithoutComments comparison
+          symbol.textContent = '!';
+          symbol.className += ' symbol-both symbol-different';
+          symbol.title = `Diferente entre orgs (longitud: ${component.lengthWithoutCommentsA} vs ${component.lengthWithoutCommentsB})`;
+        } else if (component.lengthWithoutCommentsA !== undefined && component.lengthWithoutCommentsB !== undefined) {
+          // Same lengthWithoutComments - likely equal (but click to verify)
+          symbol.textContent = '=';
+          symbol.className += ' symbol-both symbol-equal';
+          symbol.title = 'Probablemente igual (misma longitud sin comentarios)';
+        } else {
+          // No lengthWithoutComments available - unknown status
+          symbol.textContent = '?';
+          symbol.className += ' symbol-both symbol-unknown';
+          symbol.title = 'Haz clic para comparar contenido';
+        }
       } else if (component.inOrgA) {
         symbol.textContent = 'A';
         symbol.className += ' symbol-org-a';
