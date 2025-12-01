@@ -1,10 +1,13 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
-import { join } from 'path';
+import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+import { exec } from 'child_process';
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -221,7 +224,10 @@ export async function listMetadataComponents(metadataType, orgAlias) {
  * @param {string} orgAlias - Alias de la org
  * @returns {Promise<string>} - Contenido completo del componente
  */
-export async function retrieveMetadataComponent(metadataType, componentName, orgAlias) {
+export async function retrieveMetadataComponent(metadataType, componentName, orgAlias, filePath = null) {
+  if (filePath && filePath.includes('..')) {
+    throw new Error('Invalid file path');
+  }
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
@@ -245,7 +251,24 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
 
     // Buscar el archivo del componente recursivamente en el directorio de retrieve
     // El retrieve puede crear diferentes estructuras de directorios
-    const content = await findComponentFile(retrieveDir, metadataType, componentName);
+    let content;
+
+    if (filePath) {
+      const candidate = join(retrieveDir, filePath);
+      try {
+        content = await readFile(candidate, 'utf-8');
+      } catch (_err) {
+        // Intentar localizar la carpeta del componente y leer relativo a ella
+        const componentFolder = await findComponentFolder(retrieveDir, componentName);
+        if (componentFolder) {
+          content = await readFile(join(componentFolder, filePath), 'utf-8');
+        }
+      }
+    }
+
+    if (!content) {
+      content = await findComponentFile(retrieveDir, metadataType, componentName);
+    }
 
     if (!content) {
       throw new Error(`Could not find component file for ${metadataType}:${componentName} in retrieved files`);
@@ -303,6 +326,104 @@ async function findComponentFile(baseDir, metadataType, componentName) {
   }
 
   return null;
+}
+
+/**
+ * Busca la carpeta base del componente (útil para bundles) de forma recursiva
+ * @param {string} baseDir - Directorio base del retrieve
+ * @param {string} componentName - Nombre del componente
+ * @returns {Promise<string|null>} - Ruta de la carpeta o null si no se encuentra
+ */
+async function findComponentFolder(baseDir, componentName) {
+  try {
+    const entries = await readdir(baseDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(baseDir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === componentName) {
+          return fullPath;
+        }
+
+        const found = await findComponentFolder(fullPath, componentName);
+        if (found) return found;
+      }
+    }
+  } catch (error) {
+    console.error(`Error searching for component folder ${componentName}:`, error);
+  }
+
+  return null;
+}
+
+/**
+ * Lista los archivos de un componente tipo bundle (carpeta) después de un retrieve
+ * @param {string} metadataType
+ * @param {string} componentName
+ * @param {string} orgAlias
+ * @returns {Promise<Array<string>>}
+ */
+export async function listBundleFiles(metadataType, componentName, orgAlias) {
+  // Crear directorio temporal si no existe
+  try {
+    await mkdir(TMP_DIR, { recursive: true });
+  } catch (_error) {
+    // ignore
+  }
+
+  const retrieveDir = join(TMP_DIR, `retrieve_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+
+  try {
+    const args = [
+      'project',
+      'retrieve',
+      'start',
+      '--metadata',
+      `${metadataType}:${componentName}`,
+      '--output-dir',
+      retrieveDir,
+      '--target-org',
+      orgAlias
+    ];
+    await execFileAsync('sf', args, {
+      maxBuffer: 100 * 1024 * 1024,
+      timeout: 300000,
+      cwd: PROJECT_ROOT
+    });
+
+    const componentFolder = await findComponentFolder(retrieveDir, componentName);
+    const base = componentFolder || retrieveDir;
+
+    const files = await listFilesRecursively(base, base);
+    return files;
+  } catch (error) {
+    console.error(`Error listing bundle files for ${metadataType}:${componentName} in ${orgAlias}:`, error);
+    throw error;
+  } finally {
+    try {
+      await rm(retrieveDir, { recursive: true, force: true });
+    } catch (_cleanupErr) {
+      // ignore
+    }
+  }
+}
+
+async function listFilesRecursively(dir, baseDir) {
+  const files = [];
+
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = await listFilesRecursively(fullPath, baseDir);
+      files.push(...sub);
+    } else {
+      const rel = relative(baseDir, fullPath);
+      files.push(rel);
+    }
+  }
+
+  return files;
 }
 
 /**
