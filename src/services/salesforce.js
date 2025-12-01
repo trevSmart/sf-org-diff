@@ -643,6 +643,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
     const zip = new AdmZip(zipPath);
     const zipEntries = zip.getEntries()
+      .filter(entry => !entry.isDirectory)
       .map(entry => entry.entryName)
       .filter(entry => entry && entry.includes('/'));
 
