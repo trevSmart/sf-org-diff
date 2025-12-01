@@ -636,7 +636,6 @@ export class TreeView {
 
     // Actualitzar etiquetes d'orgs (manté A i B, però B estarà buit)
     const diffLabelA = document.getElementById('diffLabelA');
-    const diffLabelB = document.getElementById('diffLabelB');
     const labelTextA = diffLabelA?.querySelector('.diff-label-text');
     const labelTextB = diffLabelB?.querySelector('.diff-label-text');
     if (labelTextA) labelTextA.textContent = `${this.orgAliasA}`;
@@ -704,7 +703,13 @@ export class TreeView {
           deployBtn = document.createElement('button');
           deployBtn.type = 'button';
           deployBtn.className = 'btn-mark-deploy';
-          diffLabelB.appendChild(deployBtn);
+          // Inserir el botó ABANS del nom de la org B
+          const labelTextB = diffLabelB.querySelector('.diff-label-text');
+          if (labelTextB) {
+            diffLabelB.insertBefore(deployBtn, labelTextB);
+          } else {
+            diffLabelB.appendChild(deployBtn);
+          }
         }
 
         const updateButtonText = () => {
@@ -1058,7 +1063,6 @@ export class TreeView {
 
     // Actualizar etiquetas de las orgs (mantener las icones A y B)
     const diffLabelA = document.getElementById('diffLabelA');
-    const diffLabelB = document.getElementById('diffLabelB');
     const labelTextA = diffLabelA?.querySelector('.diff-label-text');
     const labelTextB = diffLabelB?.querySelector('.diff-label-text');
     if (labelTextA) labelTextA.textContent = `${this.orgAliasA}`;
