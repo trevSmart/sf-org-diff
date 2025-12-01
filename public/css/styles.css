@@ -1227,9 +1227,14 @@ h2 {
 }
 
 .symbol-resolved {
-  background-color: #3498db;
+  background-color: #ff9800;
   color: white;
   border-radius: 50%;
+}
+
+.component-resolved .component-name {
+  color: #ff9800;
+  font-weight: 600;
 }
 
 .symbol-unknown {

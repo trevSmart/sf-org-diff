@@ -1101,6 +1101,11 @@ export class TreeView {
     const symbol = this.componentSymbols.get(key);
     if (!symbol) return;
 
+    const componentItem = symbol.closest('.tree-leaf, .bundle-node');
+    if (componentItem) {
+      componentItem.classList.remove('component-resolved');
+    }
+
     symbol.className = 'component-symbol symbol-both';
 
     if (status === 'equal') {
@@ -1115,6 +1120,9 @@ export class TreeView {
       symbol.textContent = '★';
       symbol.classList.add('symbol-resolved');
       symbol.title = 'Modificado: contenido de Org B actualizado desde Org A';
+      if (componentItem) {
+        componentItem.classList.add('component-resolved');
+      }
     } else if (status === 'error') {
       symbol.textContent = '?';
       symbol.classList.add('symbol-error');

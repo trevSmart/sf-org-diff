@@ -36,7 +36,8 @@ function createRevertControlButton(onResolved) {
   button.appendChild(icon);
 
   if (typeof onResolved === 'function') {
-    button.addEventListener('click', () => {
+    // Ús de mousedown perquè CodeMirror pot gestionar els clics internament
+    button.addEventListener('mousedown', () => {
       // Deixar que CodeMirror faci el revert i després marcar com resolt
       setTimeout(() => {
         try {
