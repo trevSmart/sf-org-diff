@@ -321,7 +321,7 @@ async function findComponentFile(baseDir, metadataType, componentName) {
       return await readFile(foundFile, 'utf-8');
     }
   } catch (error) {
-    console.error(`Error searching recursively for ${componentName}:`, error);
+    console.error('Error searching recursively for %s:', componentName, error);
   }
 
   return null;
