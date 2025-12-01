@@ -53,6 +53,9 @@ export async function runCliCommand(command, orgAlias = null) {
     fullCommand = `${command} --target-org "${orgAlias}"`;
   }
 
+  // Log the CLI command being executed
+  console.log(`[SF CLI] Executing: ${fullCommand}`);
+
   try {
     // Aumentar el maxBuffer significativamente para manejar respuestas muy grandes (100MB)
     // Esto es necesario cuando hay mucha metadata en las orgs
@@ -195,6 +198,9 @@ async function queryToolingApi(orgAlias, objectName, componentName, bodyField) {
   // Make the Tooling API request using the access token
   const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
 
+  // Log the Tooling API call
+  console.log(`[Tooling API] GET ${apiUrl}`);
+
   const response = await fetch(apiUrl, {
     method: 'GET',
     headers: {
@@ -247,6 +253,9 @@ async function listApexClassesViaToolingApi(orgAlias) {
   const encodedQuery = encodeURIComponent(query);
 
   const apiUrl = `${instanceUrl}/services/data/${SF_API_VERSION}/tooling/query/?q=${encodedQuery}`;
+
+  // Log the Tooling API call
+  console.log(`[Tooling API] GET ${apiUrl}`);
 
   const response = await fetch(apiUrl, {
     method: 'GET',
@@ -467,6 +476,9 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
     const retrieveCommand = `sf project retrieve start --metadata ${metadataType}:${componentName} --output-dir "${retrieveDir}" --target-org "${orgAlias}"`;
     const fullCommand = retrieveCommand;
 
+    // Log the CLI command being executed
+    console.log(`[SF CLI] Executing: ${fullCommand}`);
+
     await execAsync(fullCommand, {
       maxBuffer: 100 * 1024 * 1024, // 100MB
       timeout: 300000, // 5 minutos
@@ -609,6 +621,10 @@ export async function listBundleFiles(metadataType, componentName, orgAlias) {
       '--target-org',
       orgAlias
     ];
+
+    // Log the CLI command being executed
+    console.log(`[SF CLI] Executing: sf ${args.join(' ')}`);
+
     await execFileAsync('sf', args, {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 300000,
