@@ -93,8 +93,8 @@ app.get('/api/metadata/:orgAlias/:metadataType', async (req, res) => {
     // Usar las variables decodificadas o los parámetros originales como fallback
     const errorOrgAlias = orgAlias || req.params.orgAlias;
     const errorMetadataType = metadataType || req.params.metadataType;
-    console.error(`Error getting metadata components for ${errorMetadataType} in org ${errorOrgAlias}:`, error);
-    console.error(`Error stack:`, error.stack);
+    console.error('Error getting metadata components for %s in org %s:', errorMetadataType, errorOrgAlias, error);
+    console.error('Error stack:', error.stack);
 
     // Asegurarse de que la respuesta no se haya enviado ya
     if (!res.headersSent) {
