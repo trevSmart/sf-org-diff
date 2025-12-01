@@ -405,6 +405,10 @@ function isThirdPartyComponent(component) {
  * @returns {Promise<Array>} - Array de componentes con metadatos básicos (sin componentes de terceros)
  */
 export async function listMetadataComponents(metadataType, orgAlias) {
+  // Validate inputs to prevent command injection
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateOrgAlias(orgAlias);
+
   try {
     // For ApexClass, use Tooling API for faster listing with proper filters
     if (metadataType === 'ApexClass') {
@@ -499,8 +503,21 @@ export async function listMetadataComponents(metadataType, orgAlias) {
  * @returns {Promise<string>} - Contenido completo del componente
  */
 export async function retrieveMetadataComponent(metadataType, componentName, orgAlias, filePath = null) {
-  if (filePath && filePath.includes('..')) {
-    throw new Error('Invalid file path');
+  // Validate inputs to prevent command injection
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateMetadataIdentifier(componentName, 'component name');
+  validateOrgAlias(orgAlias);
+
+  // Validate filePath if provided
+  if (filePath) {
+    if (filePath.includes('..')) {
+      throw new Error('Invalid file path: path traversal not allowed');
+    }
+    // Additional validation: filePath should only contain safe characters
+    const safePathPattern = /^[a-zA-Z0-9_\-./]+$/;
+    if (!safePathPattern.test(filePath)) {
+      throw new Error('Invalid file path: contains disallowed characters');
+    }
   }
 
   // For simple metadata types without filePath, try the fast Tooling API approach first
@@ -514,12 +531,15 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     }
   }
 
-  // For non-Apex metadata types, prefer Metadata API retrieve which is faster than project retrieve
-  try {
-    console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
-    return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
-  } catch (metadataError) {
-    console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+  // For non-Apex metadata types (those not supported by Tooling API), prefer Metadata API retrieve
+  // which is faster than project retrieve. Skip for Apex types since Tooling API is preferred for those.
+  if (!supportsToolingApi(metadataType)) {
+    try {
+      console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
+      return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
+    } catch (metadataError) {
+      console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+    }
   }
 
   // Fall back to the traditional sf project retrieve method
@@ -537,6 +557,12 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
  * @returns {Promise<string>} - The content of the component
  */
 async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias, filePath = null) {
+  // Validate inputs to prevent command injection
+  // Note: These should already be validated in retrieveMetadataComponent, but we validate again for defense in depth
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateMetadataIdentifier(componentName, 'component name');
+  validateOrgAlias(orgAlias);
+
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
@@ -547,15 +573,19 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
   const retrieveDir = join(TMP_DIR, `retrieve_${Date.now()}_${Math.random().toString(36).substring(7)}`);
 
   try {
-    // Usar sf project retrieve para obtener el componente en un directorio temporal
-    // El flag correcto es --output-dir, no --target-dir
-    const retrieveCommand = `sf project retrieve start --metadata ${metadataType}:${componentName} --output-dir "${retrieveDir}" --target-org "${orgAlias}"`;
-    const fullCommand = retrieveCommand;
+    // Use execFileAsync with array of arguments to avoid shell injection
+    // This is safer than execAsync with string interpolation
+    const sfArgs = [
+      'project', 'retrieve', 'start',
+      '--metadata', `${metadataType}:${componentName}`,
+      '--output-dir', retrieveDir,
+      '--target-org', orgAlias
+    ];
 
     // Log the CLI command being executed
-    console.log(`[SF CLI] Executing: ${fullCommand}`);
+    console.log(`[SF CLI] Executing: sf ${sfArgs.join(' ')}`);
 
-    await execAsync(fullCommand, {
+    await execFileAsync('sf', sfArgs, {
       maxBuffer: 100 * 1024 * 1024, // 100MB
       timeout: 300000, // 5 minutos
       cwd: PROJECT_ROOT
@@ -607,6 +637,52 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
 }
 
 /**
+ * Validates that a metadata identifier (type or component name) is safe to use in CLI commands.
+ * Prevents command injection by rejecting dangerous characters.
+ * @param {string} identifier - The metadata type or component name to validate
+ * @param {string} identifierName - Name of the identifier for error messages
+ * @throws {Error} If the identifier contains invalid characters
+ */
+function validateMetadataIdentifier(identifier, identifierName) {
+  // Allow alphanumeric, underscores, hyphens, and dots only
+  // Spaces are NOT allowed to prevent argument splitting in command execution
+  // Reject shell metacharacters that could enable command injection
+  const safePattern = /^[a-zA-Z0-9_\-.]+$/;
+  if (!identifier || !safePattern.test(identifier)) {
+    throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
+  }
+  // Explicitly reject path traversal attempts (consecutive dots)
+  if (identifier.includes('..')) {
+    throw new Error(`Invalid ${identifierName}: path traversal not allowed`);
+  }
+}
+
+/**
+ * Validates that an org alias is safe to use in CLI commands.
+ * Org aliases can contain spaces (they are quoted in commands), but we still need to
+ * prevent command injection by rejecting dangerous shell metacharacters.
+ * @param {string} orgAlias - The org alias to validate
+ * @param {string} identifierName - Name of the identifier for error messages
+ * @throws {Error} If the org alias contains invalid characters
+ */
+function validateOrgAlias(orgAlias, identifierName = 'org alias') {
+  if (!orgAlias || typeof orgAlias !== 'string') {
+    throw new Error(`Invalid ${identifierName}: must be a non-empty string`);
+  }
+  // Allow alphanumeric, underscores, hyphens, dots, and spaces
+  // Reject shell metacharacters that could enable command injection even when quoted
+  // Reject characters that could break out of quotes: $, `, \, ", ', newlines, etc.
+  const safePattern = /^[a-zA-Z0-9_\-. ]+$/;
+  if (!safePattern.test(orgAlias)) {
+    throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
+  }
+  // Explicitly reject path traversal attempts
+  if (orgAlias.includes('..')) {
+    throw new Error(`Invalid ${identifierName}: path traversal not allowed`);
+  }
+}
+
+/**
  * Retrieves component content using sf metadata retrieve (Metadata API)
  * Mirrors the strategy used by Salesforce VS Code extensions for faster diffs
  * than project retrieve for most metadata types (non-Apex).
@@ -617,41 +693,56 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
  * @returns {Promise<string>} - The content of the component
  */
 async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath = null) {
+  // Validate inputs to prevent command injection
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateMetadataIdentifier(componentName, 'component name');
+  validateOrgAlias(orgAlias);
+
   await mkdir(TMP_DIR, { recursive: true });
 
   const retrieveDir = join(TMP_DIR, `metadata_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const zipPath = join(retrieveDir, 'retrieve.zip');
 
   try {
-    const retrieveCommand = [
-      'sf metadata retrieve start',
-      `--metadata "${metadataType}:${componentName}"`,
-      `--target-org "${orgAlias}"`,
-      `--zip-file "${zipPath}"`,
-      '--single-package',
-      '--wait 120'
-    ].join(' ');
+    // Create the retrieve directory before attempting to write zip file into it
+    await mkdir(retrieveDir, { recursive: true });
 
-    console.log(`[SF CLI] Executing: ${retrieveCommand}`);
-    await execAsync(retrieveCommand, {
+    // Use execFileAsync with array of arguments to avoid shell injection
+    const sfArgs = [
+      'metadata', 'retrieve', 'start',
+      '--metadata', `${metadataType}:${componentName}`,
+      '--target-org', orgAlias,
+      '--zip-file', zipPath,
+      '--single-package',
+      '--wait', '240'  // 4 minutes CLI wait, with 60s buffer before 5-minute Node timeout
+    ];
+
+    console.log(`[SF CLI] Executing: sf ${sfArgs.join(' ')}`);
+    await execFileAsync('sf', sfArgs, {
       maxBuffer: 100 * 1024 * 1024,
-      timeout: 300000,
+      timeout: 300000,  // 5 minutes (60s buffer after CLI --wait 240)
       cwd: PROJECT_ROOT
     });
 
     // Use adm-zip for cross-platform zip handling instead of shell unzip command
     // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
     const zip = new AdmZip(zipPath);
+    
+    // Filter zip entries to only include actual file paths with content
+    // Exclude directory entries (ending with /) and validate they have expected structure
     const zipEntries = zip.getEntries()
       .map(entry => entry.entryName)
-      .filter(entry => entry && entry.includes('/'));
+      .filter(entry => {
+        // Must have a path separator, not end with / (directories), and not be empty
+        return entry && entry.includes('/') && !entry.endsWith('/');
+      });
 
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
     if (!candidateEntry) {
-      const sampleEntries = zipEntries.slice(0, 5).join(', ');
+      // Only show the count of entries, not the actual paths which could expose sensitive info
       throw new Error(
-        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries; sample: ${sampleEntries})`
+        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries)`
       );
     }
 
@@ -742,6 +833,11 @@ async function findComponentFolder(baseDir, componentName) {
  * @returns {Promise<Array<string>>}
  */
 export async function listBundleFiles(metadataType, componentName, orgAlias) {
+  // Validate inputs to prevent command injection
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateMetadataIdentifier(componentName, 'component name');
+  validateOrgAlias(orgAlias);
+
   // Crear directorio temporal si no existe
   try {
     await mkdir(TMP_DIR, { recursive: true });
