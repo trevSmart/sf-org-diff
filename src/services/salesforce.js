@@ -622,6 +622,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
   const zipPath = join(retrieveDir, 'retrieve.zip');
 
   try {
+    await mkdir(retrieveDir, { recursive: true });
     const retrieveCommand = [
       'sf metadata retrieve start',
       `--metadata "${metadataType}:${componentName}"`,
