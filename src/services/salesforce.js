@@ -651,7 +651,10 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
     if (!candidateEntry) {
-      throw new Error(`Could not locate ${metadataType}:${componentName} in retrieved zip file`);
+      const sampleEntries = zipEntries.slice(0, 5).join(', ');
+      throw new Error(
+        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries; sample: ${sampleEntries})`
+      );
     }
 
     const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
