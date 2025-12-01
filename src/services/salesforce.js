@@ -514,11 +514,13 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
   }
 
   // For non-Apex metadata types, prefer Metadata API retrieve which is faster than project retrieve
-  try {
-    console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
-    return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
-  } catch (metadataError) {
-    console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+  if (!filePath && !supportsToolingApi(metadataType)) {
+    try {
+      console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
+      return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
+    } catch (metadataError) {
+      console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+    }
   }
 
   // Fall back to the traditional sf project retrieve method
