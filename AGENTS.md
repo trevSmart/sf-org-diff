@@ -305,7 +305,10 @@ export SF_INSTANCE_URL=$(echo "$response" | jq -r '.instance_url')
 sf org login access-token --instance-url $SF_INSTANCE_URL --no-prompt --alias ALMIRALL
 ```
 
-
+Check the orgs are authorized with the following command:
+```
+    sf org display --json
+```
 
 ### Auto-selection of Test Orgs
 To speed up testing during development, the application now automatically selects the following orgs if they are available in the list:
