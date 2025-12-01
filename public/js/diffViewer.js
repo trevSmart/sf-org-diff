@@ -71,8 +71,6 @@ export async function initDiffViewer(containerId, originalContent, modifiedConte
   // Forzar width y height al 100% para que el editor pueda calcular correctamente sus dimensiones
   container.style.width = '100%';
   container.style.height = '100%';
-  container.style.minWidth = '100%';
-  container.style.minHeight = '420px';
 
   // Obtener el contenedor padre (diff-panel) para asegurar que también tenga dimensiones
   const parentPanel = container.closest('.diff-panel');
@@ -88,17 +86,6 @@ export async function initDiffViewer(containerId, originalContent, modifiedConte
 
   // Esperar un frame para que el layout se actualice
   await new Promise(resolve => requestAnimationFrame(resolve));
-
-  // Verificar dimensiones después del layout
-  const rect = container.getBoundingClientRect();
-  if (rect.height === 0 || rect.height < 360) {
-    container.style.minHeight = '420px';
-    container.style.height = '420px';
-  }
-  if (rect.width === 0 || rect.width < 400) {
-    container.style.minWidth = '100%';
-    container.style.width = '100%';
-  }
 
   const languageId = resolveLanguage(language);
 
