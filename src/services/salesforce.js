@@ -396,7 +396,7 @@ export async function listBundleFiles(metadataType, componentName, orgAlias) {
     const files = await listFilesRecursively(base, base);
     return files;
   } catch (error) {
-    console.error(`Error listing bundle files for ${metadataType}:${componentName} in ${orgAlias}:`, error);
+    console.error('Error listing bundle files for %s:%s in %s:', metadataType, componentName, orgAlias, error);
     throw error;
   } finally {
     try {
