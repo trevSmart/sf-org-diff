@@ -417,17 +417,13 @@ export class TreeView {
       if (component.inOrgA && component.inOrgB) {
         // Component exists in both orgs - check if we detected differences via lengthWithoutComments
         if (component.hasDifferences) {
-          // Differences detected via lengthWithoutComments comparison
+          // Differences detected via lengthWithoutComments comparison (different lengths = definitely different)
           symbol.textContent = '!';
           symbol.className += ' symbol-both symbol-different';
           symbol.title = `Diferente entre orgs (longitud: ${component.lengthWithoutCommentsA} vs ${component.lengthWithoutCommentsB})`;
-        } else if (component.lengthWithoutCommentsA !== undefined && component.lengthWithoutCommentsB !== undefined) {
-          // Same lengthWithoutComments - likely equal (but click to verify)
-          symbol.textContent = '=';
-          symbol.className += ' symbol-both symbol-equal';
-          symbol.title = 'Probablemente igual (misma longitud sin comentarios)';
         } else {
-          // No lengthWithoutComments available - unknown status
+          // Same lengthWithoutComments or no data available - still unknown
+          // (same length doesn't guarantee same content, so we keep it as unknown)
           symbol.textContent = '?';
           symbol.className += ' symbol-both symbol-unknown';
           symbol.title = 'Haz clic para comparar contenido';
