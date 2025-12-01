@@ -513,12 +513,15 @@ export async function retrieveMetadataComponent(metadataType, componentName, org
     }
   }
 
-  // For non-Apex metadata types, prefer Metadata API retrieve which is faster than project retrieve
-  try {
-    console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
-    return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
-  } catch (metadataError) {
-    console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+  // For non-Apex metadata types (those not supported by Tooling API), prefer Metadata API retrieve
+  // which is faster than project retrieve. Skip for Apex types since Tooling API is preferred for those.
+  if (!supportsToolingApi(metadataType)) {
+    try {
+      console.log(`Using Metadata API retrieve for ${metadataType}:${componentName} from ${orgAlias}`);
+      return await retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath);
+    } catch (metadataError) {
+      console.warn(`Metadata API retrieval failed for ${metadataType}:${componentName}, falling back to project retrieve: ${metadataError.message}`);
+    }
   }
 
   // Fall back to the traditional sf project retrieve method
@@ -606,6 +609,22 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
 }
 
 /**
+ * Validates that a metadata identifier (type or component name) is safe to use in CLI commands.
+ * Prevents command injection by rejecting dangerous characters.
+ * @param {string} identifier - The metadata type or component name to validate
+ * @param {string} identifierName - Name of the identifier for error messages
+ * @throws {Error} If the identifier contains invalid characters
+ */
+function validateMetadataIdentifier(identifier, identifierName) {
+  // Allow alphanumeric, underscores, hyphens, dots, and spaces (for component names)
+  // Reject shell metacharacters that could enable command injection
+  const safePattern = /^[a-zA-Z0-9_\-. ]+$/;
+  if (!identifier || !safePattern.test(identifier)) {
+    throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
+  }
+}
+
+/**
  * Retrieves component content using sf metadata retrieve (Metadata API)
  * Mirrors the strategy used by Salesforce VS Code extensions for faster diffs
  * than project retrieve for most metadata types (non-Apex).
@@ -616,45 +635,59 @@ async function retrieveViaProjectRetrieve(metadataType, componentName, orgAlias,
  * @returns {Promise<string>} - The content of the component
  */
 async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, filePath = null) {
+  // Validate inputs to prevent command injection
+  validateMetadataIdentifier(metadataType, 'metadata type');
+  validateMetadataIdentifier(componentName, 'component name');
+  validateMetadataIdentifier(orgAlias, 'org alias');
+
   await mkdir(TMP_DIR, { recursive: true });
 
   const retrieveDir = join(TMP_DIR, `metadata_${Date.now()}_${Math.random().toString(36).substring(7)}`);
   const zipPath = join(retrieveDir, 'retrieve.zip');
 
   try {
-    const retrieveCommand = [
-      'sf metadata retrieve start',
-      `--metadata "${metadataType}:${componentName}"`,
-      `--target-org "${orgAlias}"`,
-      `--zip-file "${zipPath}"`,
-      '--single-package',
-      '--wait 120'
-    ].join(' ');
+    // Create the retrieve directory before attempting to write zip file into it
+    await mkdir(retrieveDir, { recursive: true });
 
-    console.log(`[SF CLI] Executing: ${retrieveCommand}`);
-    await execAsync(retrieveCommand, {
+    // Use execFileAsync with array of arguments to avoid shell injection
+    const sfArgs = [
+      'metadata', 'retrieve', 'start',
+      '--metadata', `${metadataType}:${componentName}`,
+      '--target-org', orgAlias,
+      '--zip-file', zipPath,
+      '--single-package',
+      '--wait', '240'  // Align with 5-minute (300s) timeout below with buffer
+    ];
+
+    console.log(`[SF CLI] Executing: sf ${sfArgs.join(' ')}`);
+    await execFileAsync('sf', sfArgs, {
       maxBuffer: 100 * 1024 * 1024,
-      timeout: 300000,
+      timeout: 300000,  // 5 minutes
       cwd: PROJECT_ROOT
     });
 
-    const { stdout: zipList } = await execAsync(`unzip -l "${zipPath}"`, {
+    // Use unzip -Z1 for more reliable parsing (one filename per line, no formatting)
+    const { stdout: zipList } = await execFileAsync('unzip', ['-Z1', zipPath], {
       maxBuffer: 10 * 1024 * 1024,
       timeout: 120000
     });
 
     const zipEntries = zipList
       .split('\n')
-      .map(line => line.trim().split(/\s+/).pop())
-      .filter(entry => entry && entry.includes('/') && entry !== 'Archive:');
+      .map(line => line.trim())
+      .filter(entry => entry && entry.includes('/'));
 
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
     if (!candidateEntry) {
-      throw new Error(`Could not locate ${metadataType}:${componentName} in retrieved zip file`);
+      const sampleEntries = zipEntries.slice(0, 5).join(', ');
+      throw new Error(
+        `Could not locate ${metadataType}:${componentName} in retrieved zip file (found ${zipEntries.length} entries; sample: ${sampleEntries})`
+      );
     }
 
-    const { stdout: content } = await execAsync(`unzip -p "${zipPath}" "${candidateEntry}"`, {
+    // Use execFileAsync with array of arguments to avoid command injection
+    const { stdout: content } = await execFileAsync('unzip', ['-p', zipPath, candidateEntry], {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 120000
     });
