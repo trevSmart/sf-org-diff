@@ -1,5 +1,7 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 import { readFile, mkdir, rm, readdir } from 'fs/promises';
 import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
@@ -371,8 +373,18 @@ export async function listBundleFiles(metadataType, componentName, orgAlias) {
   const retrieveDir = join(TMP_DIR, `retrieve_${Date.now()}_${Math.random().toString(36).substring(7)}`);
 
   try {
-    const retrieveCommand = `sf project retrieve start --metadata ${metadataType}:${componentName} --output-dir "${retrieveDir}" --target-org "${orgAlias}"`;
-    await execAsync(retrieveCommand, {
+    const args = [
+      'project',
+      'retrieve',
+      'start',
+      '--metadata',
+      `${metadataType}:${componentName}`,
+      '--output-dir',
+      retrieveDir,
+      '--target-org',
+      orgAlias
+    ];
+    await execFileAsync('sf', args, {
       maxBuffer: 100 * 1024 * 1024,
       timeout: 300000,
       cwd: PROJECT_ROOT
