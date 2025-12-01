@@ -381,26 +381,28 @@ export function updateDiffContent(originalContent, modifiedContent) {
  * @returns {string} - El nuevo tema aplicado
  */
 export function toggleTheme() {
-  if (!monacoEditor) {
-    return currentTheme;
-  }
-
-  // Alternar entre 'vs' (claro) y 'vs-dark' (oscuro)
+  // Alternar entre 'vs' (claro) y 'vs-dark' (oscuro) SIEMPRE,
+  // aunque todavía no se haya inicializado Monaco.
   currentTheme = currentTheme === 'vs-dark' ? 'vs' : 'vs-dark';
 
-  // Aplicar el nuevo tema usando setTheme para asegurar que todos los componentes se actualicen
-  // incluyendo el minimap
+  // Aplicar el nuevo tema globalmente en Monaco si está disponible.
+  // Esto asegura que todos los componentes, incluyendo el minimap, usen el tema correcto.
   if (typeof monaco !== 'undefined') {
     defineThemes();
     monaco.editor.setTheme(getMonacoThemeId(currentTheme));
   }
 
-  // También actualizar las opciones del editor
-  monacoEditor.updateOptions({
-    theme: getMonacoThemeId(currentTheme)
-  });
+  // Si el diff viewer de Monaco está inicializado, actualizar también sus opciones
+  // y el fondo del contenedor. Si no lo está (por ejemplo, si se está usando
+  // CodeMirror o aún no se ha abierto ningún diff), simplemente se guarda la
+  // preferencia para usarla más adelante.
+  if (monacoEditor) {
+    monacoEditor.updateOptions({
+      theme: getMonacoThemeId(currentTheme)
+    });
 
-  applyContainerBackground(monacoEditor.getContainerDomNode(), currentTheme);
+    applyContainerBackground(monacoEditor.getContainerDomNode(), currentTheme);
+  }
 
   // Guardar preferencia
   saveTheme(currentTheme);

@@ -125,7 +125,6 @@ h1 {
 .screen-header {
   display: flex;
   align-items: center;
-  gap: 15px;
   margin-bottom: 8px;
   padding: 0;
   flex-wrap: wrap;
@@ -224,7 +223,7 @@ h2 {
 .org-selector select {
   width: 100%;
   padding: 9px;
-  border: 2px solid #ddd;
+  border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 15px;
   background-color: white;
@@ -252,7 +251,7 @@ h2 {
 .refresh-orgs-link {
   color: #3498db;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13px;
   margin-top: 20px;
   display: block;
   text-align: center;
@@ -306,7 +305,7 @@ h2 {
 
 .editor-toggle select {
   padding: 8px 10px;
-  border: 2px solid #ddd;
+  border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
   background-color: white;
@@ -321,6 +320,7 @@ h2 {
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s;
+  width: 170px;
 }
 
 .btn-primary:hover {
@@ -439,7 +439,12 @@ h2 {
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.org-info .btn-icon-toggle-treeview {
+  position: absolute;
+  left: 16px;
 }
 
 .org-info-item {
@@ -475,6 +480,19 @@ h2 {
   min-height: 0;
 }
 
+.main-content.treeview-collapsed .treeview-container,
+.main-content.treeview-collapsed .resizer {
+  max-width: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.main-content.treeview-collapsed .diff-panel {
+  min-width: 0;
+  width: 100%;
+}
+
 .treeview-container {
   display: flex;
   flex-direction: column;
@@ -486,6 +504,7 @@ h2 {
   height: calc(100vh - var(--viewport-offset));
   max-height: calc(100vh - var(--viewport-offset));
   overflow: visible;
+  transition: max-width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
 }
 
 .resizer {
@@ -494,7 +513,7 @@ h2 {
   cursor: col-resize;
   flex-shrink: 0;
   position: relative;
-  transition: background-color 0.2s, opacity 0.2s;
+  transition: background-color 0.2s, opacity 0.2s, width 0.25s ease;
   user-select: none;
   opacity: 0;
 }
@@ -533,16 +552,7 @@ h2 {
   position: sticky;
   top: 20px;
   align-self: flex-start;
-  /* Mantener el espacio reservado incluso cuando está oculto */
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.2s, visibility 0.2s;
   overflow: hidden;
-}
-
-.diff-panel.visible {
-  visibility: visible;
-  opacity: 1;
 }
 
 .diff-panel-header {
@@ -551,6 +561,29 @@ h2 {
   align-items: center;
   padding: 6px 16px;
   border-bottom: 2px solid #e0e0e0;
+}
+
+.btn-icon-toggle-treeview {
+  background-color: transparent;
+  border: none;
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.btn-icon-toggle-treeview i {
+  font-size: 14px;
+}
+
+.btn-icon-toggle-treeview:hover {
+  background-color: #f0f0f0;
+  color: #3498db;
 }
 
 .diff-panel-header h2 {
@@ -886,7 +919,7 @@ h2 {
   width: 100%;
   padding: 10px 40px 10px 15px;
   font-size: 14px;
-  border: 2px solid #ddd;
+  border: 1px solid #ddd;
   border-radius: 4px;
   background-color: white;
   transition: border-color 0.3s;
@@ -969,7 +1002,7 @@ h2 {
   background-color: white;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 6px;
+  padding: 12px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -981,6 +1014,8 @@ h2 {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
 }
 
 .tree-node {
@@ -1187,6 +1222,12 @@ h2 {
 
 .symbol-different {
   background-color: #e74c3c;
+  color: white;
+  border-radius: 50%;
+}
+
+.symbol-resolved {
+  background-color: #3498db;
   color: white;
   border-radius: 50%;
 }

@@ -4,7 +4,7 @@ import { setActiveDiffEditorType, getActiveDiffEditorType, destroyDiffEditor } f
 
 // Constantes
 const STORAGE_KEY = 'orgdiff_orgs_list';
-const DEV_MODE = true; // Cambiar a false para producción
+const DEV_MODE = false; // Cambiar a false para producción
 
 // Estado de la aplicación
 let selectedOrgA = null;
@@ -31,6 +31,8 @@ const clearComponentFilterBtn = document.getElementById('clearComponentFilterBtn
 const diffEditorSelect = document.getElementById('diffEditorSelect');
 const backBtn = document.getElementById('backBtn');
 const closeDiffBtn = document.getElementById('closeDiffBtn');
+const toggleTreeviewBtn = document.getElementById('toggleTreeviewBtn');
+const mainContent = document.querySelector('.main-content');
 const metadataTypesWarning = document.getElementById('metadataTypesWarning');
 const devModeIndicator = document.getElementById('devModeIndicator');
 let metadataTypeNames = [];
@@ -41,6 +43,42 @@ if (diffEditorSelect) {
   diffEditorSelect.addEventListener('change', (e) => {
     setActiveDiffEditorType(e.target.value);
   });
+}
+
+// Subscriure's al stream de logs del servidor i replicar-los a la consola del navegador
+function initializeServerLogStream() {
+  if (!window.EventSource) {
+    console.warn('EventSource not supported in this browser; server logs will not be mirrored.');
+    return;
+  }
+
+  try {
+    const source = new EventSource('/api/log-stream');
+
+    source.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        const prefix = `[server ${payload.level || 'log'}]`;
+        if (payload.level === 'error') {
+          console.error(prefix, payload.message);
+        } else if (payload.level === 'warn') {
+          console.warn(prefix, payload.message);
+        } else {
+          console.log(prefix, payload.message);
+        }
+      } catch {
+        console.log('[server]', event.data);
+      }
+    };
+
+    source.onerror = () => {
+      // No saturar la consola amb errors continus
+      source.close();
+    };
+  } catch (err) {
+    console.warn('Error initializing server log stream:', err);
+  }
 }
 
 // Mostrar indicador de modo DEV si está activo
@@ -314,6 +352,8 @@ async function handleContinue() {
   // Mostrar indicador de carga mientras se validan las orgs
   continueBtn.disabled = true;
   const originalBtnText = continueBtn.textContent;
+  const originalBtnWidth = continueBtn.offsetWidth;
+  continueBtn.style.width = `${originalBtnWidth}px`;
   continueBtn.innerHTML = '<span class="loading-spinner"></span> Validando orgs...';
 
   // Validar que las orgs sean accesibles (asíncrono, no bloquea UI)
@@ -329,6 +369,7 @@ async function handleContinue() {
     // Restaurar botón
     continueBtn.disabled = false;
     continueBtn.textContent = originalBtnText;
+    continueBtn.style.width = '';
 
     if (!orgAData.success || !orgBData.success) {
       showError('Una de las orgs no está disponible, puede estar expirada o no tener acceso');
@@ -342,6 +383,7 @@ async function handleContinue() {
     // Restaurar botón en caso de error
     continueBtn.disabled = false;
     continueBtn.textContent = originalBtnText;
+    continueBtn.style.width = '';
     showError('Error al validar las orgs. Por favor, intenta de nuevo.');
   }
 }
@@ -848,6 +890,22 @@ if (closeDiffBtn) {
   });
 }
 
+// Configurar botó per amagar/mostrar la columna del treeview
+if (toggleTreeviewBtn && mainContent) {
+  toggleTreeviewBtn.addEventListener('click', () => {
+    const collapsed = mainContent.classList.toggle('treeview-collapsed');
+    const icon = toggleTreeviewBtn.querySelector('i');
+    if (collapsed) {
+      toggleTreeviewBtn.title = 'Mostrar columna de tipus';
+    } else {
+      toggleTreeviewBtn.title = 'Amagar columna de tipus';
+    }
+    if (icon) {
+      icon.className = collapsed ? 'fas fa-expand' : 'fas fa-columns';
+    }
+  });
+}
+
 // Configurar toggle para alternar tema del editor
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
@@ -887,3 +945,4 @@ if (themeToggleBtn) {
 
 // Inicializar orgs al iniciar (desde localStorage o servidor)
 initializeOrgs();
+initializeServerLogStream();

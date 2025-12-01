@@ -64,6 +64,9 @@
                             <option value="">-- Cargando orgs... --</option>
                         </select>
                     </div>
+                    <div class="org-info-separator">
+                        <i class="fas fa-arrow-right-arrow-left separator-icon"></i>
+                    </div>
                     <div class="org-selector">
                         <label for="orgB">
                             <span class="component-symbol symbol-org-b">B</span>
@@ -102,6 +105,9 @@
                 <h1>Metadata Types</h1>
             </div>
             <div class="org-info">
+                <button id="toggleTreeviewBtn" class="btn-icon-toggle-treeview" title="Amagar columna de tipus">
+                    <i class="fas fa-columns"></i>
+                </button>
                 <div class="org-info-item">
                     <span class="component-symbol symbol-org-a">A</span>
                     <span id="orgAInfo"></span>
@@ -124,7 +130,7 @@
                                     <i class="fas fa-filter"></i> Filtrar tipos de metadata:
                                 </label>
                                 <div class="filter-input-wrapper">
-                                    <input type="text" id="metadataTypeFilter" class="metadata-filter" placeholder="Ej: ApexClass Trigger* *Flow (múltiples términos, * comodín)">
+                                    <input type="text" id="metadataTypeFilter" class="metadata-filter" placeholder="Ej: class *trigger">
                                     <button type="button" id="clearTypeFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
                                         <i class="fas fa-times"></i>
                                     </button>
@@ -136,7 +142,7 @@
                                     <i class="fas fa-search"></i> Filtrar componentes:
                                 </label>
                                 <div class="filter-input-wrapper">
-                                    <input type="text" id="componentFilter" class="metadata-filter" placeholder="Ej: MyClass Test* *Service (múltiples términos, * comodín)">
+                                    <input type="text" id="componentFilter" class="metadata-filter" placeholder="">
                                     <button type="button" id="clearComponentFilterBtn" class="clear-filter-btn" title="Limpiar filtro">
                                         <i class="fas fa-times"></i>
                                     </button>
@@ -170,7 +176,11 @@
                             <span class="diff-label-text">Org B</span>
                         </span>
                     </div>
-                    <div id="diffViewer" class="diff-viewer"></div>
+                    <div id="diffViewer" class="diff-viewer">
+                        <div class="empty-message">
+                            Selecciona un component a la columna esquerra per veure aquí les diferències.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -20,6 +20,54 @@ const MONACO_DIR = join(__dirname, '..', 'node_modules', 'monaco-editor', 'min')
 const FONTAWESOME_DIR = join(__dirname, '..', 'node_modules', '@fortawesome', 'fontawesome-free');
 const NODE_MODULES_DIR = join(__dirname, '..', 'node_modules');
 
+// Clients subscrits al stream de logs (Server-Sent Events)
+const logClients = [];
+
+function broadcastLog(level, args) {
+  if (!logClients.length) return;
+  const message = args
+    .map((arg) => {
+      if (arg instanceof Error) {
+        return `${arg.message}\n${arg.stack || ''}`;
+      }
+      if (typeof arg === 'string') return arg;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(' ');
+
+  const payload = JSON.stringify({
+    level,
+    message,
+    timestamp: new Date().toISOString()
+  });
+
+  for (const res of logClients) {
+    try {
+      res.write(`data: ${payload}\n\n`);
+    } catch {
+      // Ignore socket errors; cleanup happens on 'close'
+    }
+  }
+}
+
+// Sobreescriure console.log / console.error per enviar també als clients SSE
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+console.log = (...args) => {
+  originalConsoleLog(...args);
+  broadcastLog('log', args);
+};
+
+console.error = (...args) => {
+  originalConsoleError(...args);
+  broadcastLog('error', args);
+};
+
 // Middleware para parsear JSON
 app.use(express.json({ limit: '100mb' })); // Aumentar límite de JSON
 
@@ -37,20 +85,40 @@ app.use('/node_modules', (req, res, next) => {
   if (pathParts.length === 0) {
     return res.status(404).send('Not found');
   }
-  
+
   // Check if it's a scoped package (@scope/package) or regular package
-  const packageName = pathParts[0].startsWith('@') 
-    ? `${pathParts[0]}/${pathParts[1]}` 
+  const packageName = pathParts[0].startsWith('@')
+    ? `${pathParts[0]}/${pathParts[1]}`
     : pathParts[0];
   const packageScope = pathParts[0].startsWith('@') ? pathParts[0] : pathParts[0];
-  
+
   // Only allow specific packages needed for CodeMirror
   if (!allowedPackages.some(pkg => packageScope === pkg || packageName.startsWith(pkg))) {
     return res.status(403).send('Forbidden');
   }
-  
+
   next();
 }, express.static(NODE_MODULES_DIR));
+
+// Endpoint SSE perquè el navegador rebi els logs del servidor en temps real
+app.get('/api/log-stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  // Enviar missatge inicial
+  res.write(`data: ${JSON.stringify({ level: 'info', message: 'log stream connected', timestamp: new Date().toISOString() })}\n\n`);
+
+  logClients.push(res);
+
+  req.on('close', () => {
+    const index = logClients.indexOf(res);
+    if (index !== -1) {
+      logClients.splice(index, 1);
+    }
+  });
+});
 
 // Endpoint para obtener la lista de orgs
 app.get('/api/orgs', async (req, res) => {

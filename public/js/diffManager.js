@@ -35,9 +35,9 @@ export function setActiveDiffEditorType(type) {
   return currentType;
 }
 
-export async function initDiffEditor(containerId, original, modified, language) {
+export async function initDiffEditor(containerId, original, modified, language, options) {
   const adapter = adapters[currentType] || adapters.monaco;
-  return adapter.init(containerId, original, modified, language);
+  return adapter.init(containerId, original, modified, language, options);
 }
 
 export function destroyDiffEditor() {

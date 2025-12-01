@@ -1,7 +1,7 @@
 import { BaseDiffEditor } from './baseDiffEditor.js';
 
 export class MonacoDiffEditor extends BaseDiffEditor {
-  async init(containerId, originalContent, modifiedContent, language) {
+  async init(containerId, originalContent, modifiedContent, language, _options) {
     const { initDiffViewer } = await import('../diffViewer.js');
     return initDiffViewer(containerId, originalContent, modifiedContent, language);
   }

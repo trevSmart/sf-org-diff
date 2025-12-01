@@ -900,7 +900,13 @@ export class TreeView {
         }
 
         // Mostrar contenido: Org A a la izquierda, Org B a la derecha
-        await initDiffEditor('diffViewer', dataA.content, dataB.content, language);
+        await initDiffEditor('diffViewer', dataA.content, dataB.content, language, {
+          onResolved: () => {
+            // Quan l'usuari resol de A cap a B al CodeMirror, marquem el component com modificat
+            this.updateComponentSymbol(metadataTypeName, componentName, 'resolved');
+            this.updateTitleSymbol(diffPanelTitle, metadataTypeName, componentName, 'resolved');
+          }
+        });
 
         // Actualizar toggle del tema después de inicializar el editor
         const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -919,8 +925,8 @@ export class TreeView {
         const areEqual = dataA.content === dataB.content;
         this.updateComponentSymbol(metadataTypeName, componentName, areEqual ? 'equal' : 'different');
 
-        // Actualizar la icona del títol amb el símbol correcte
-        this.updateTitleSymbol(diffPanelTitle, metadataTypeName, componentName, areEqual);
+        // Actualizar la icona del títol amb l'estat correcte
+        this.updateTitleSymbol(diffPanelTitle, metadataTypeName, componentName, areEqual ? 'equal' : 'different');
 
         // Si hay diferencias, hacer scroll automático a la primera diferencia
         if (!areEqual) {
@@ -972,7 +978,8 @@ export class TreeView {
     // Mostrar loading
     const loadingLi = document.createElement('li');
     loadingLi.className = 'loading';
-    loadingLi.textContent = 'Cargando archivos...';
+    const loadingIndicator = createLoadingIndicator('spinner', 'Cargando archivos...');
+    loadingLi.appendChild(loadingIndicator);
     childrenContainer.appendChild(loadingLi);
     childrenContainer.style.display = 'block';
 
@@ -1104,6 +1111,10 @@ export class TreeView {
       symbol.textContent = '!';
       symbol.classList.add('symbol-different');
       symbol.title = 'Diferente entre orgs';
+    } else if (status === 'resolved') {
+      symbol.textContent = '★';
+      symbol.classList.add('symbol-resolved');
+      symbol.title = 'Modificado: contenido de Org B actualizado desde Org A';
     } else if (status === 'error') {
       symbol.textContent = '?';
       symbol.classList.add('symbol-error');
@@ -1125,26 +1136,30 @@ export class TreeView {
    * @param {HTMLElement} titleElement - Elemento del título
    * @param {string} metadataTypeName - Nombre del tipo de metadata
    * @param {string} componentName - Nombre del componente
-   * @param {boolean} areEqual - Si el contenido es igual o diferente
+   * @param {('equal'|'different'|'resolved')} status - Estat del component
    */
-  updateTitleSymbol(titleElement, metadataTypeName, componentName, areEqual) {
+  updateTitleSymbol(titleElement, metadataTypeName, componentName, status) {
     if (!titleElement) return;
 
     // Buscar el símbol actual en el títol
     const existingSymbol = titleElement.querySelector('.component-symbol');
     if (!existingSymbol) return;
 
-    // Actualizar el símbol según si son iguales o diferentes
+    // Actualizar el símbol segons l'estat
     existingSymbol.className = 'component-symbol symbol-both';
 
-    if (areEqual) {
+    if (status === 'equal') {
       existingSymbol.textContent = '=';
       existingSymbol.classList.add('symbol-equal');
       existingSymbol.title = 'Igual en ambas orgs';
-    } else {
+    } else if (status === 'different') {
       existingSymbol.textContent = '!';
       existingSymbol.classList.add('symbol-different');
       existingSymbol.title = 'Diferente entre orgs';
+    } else if (status === 'resolved') {
+      existingSymbol.textContent = '★';
+      existingSymbol.classList.add('symbol-resolved');
+      existingSymbol.title = 'Modificado: contenido de Org B actualizado desde Org A';
     }
   }
 
