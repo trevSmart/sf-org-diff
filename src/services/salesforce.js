@@ -640,6 +640,7 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     });
 
     // Use adm-zip for cross-platform zip handling instead of shell unzip command
+    // adm-zip reads the entire zip file into memory, so no explicit cleanup is needed
     const zip = new AdmZip(zipPath);
     const zipEntries = zip.getEntries()
       .map(entry => entry.entryName)
@@ -655,7 +656,8 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
     }
 
     // Extract the content of the matched entry as UTF-8 string
-    const content = zip.readAsText(candidateEntry);
+    // Salesforce metadata files are always UTF-8 encoded text
+    const content = zip.readAsText(candidateEntry, 'utf8');
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
