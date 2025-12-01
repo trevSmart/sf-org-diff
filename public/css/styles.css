@@ -668,13 +668,12 @@ h2 {
 }
 
 .diff-viewer {
-  flex: 2 1 60%;
-  min-height: 420px;
+  flex: 1;
+  min-height: 0;
   background-color: transparent;
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: 100%;
 }
 
 .diff-viewer .monaco-editor {
@@ -685,6 +684,16 @@ h2 {
   bottom: 0;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* CodeMirror MergeView - fill available height */
+.diff-viewer .cm-mergeView {
+  height: 100%;
+  width: 100%;
+}
+
+.diff-viewer .cm-mergeView .cm-editor {
+  height: 100%;
 }
 
 .org-code-container {
@@ -1117,6 +1126,10 @@ h2 {
     max-height: 60vh;
     position: relative;
     top: 0;
+  }
+
+  .diff-viewer {
+    min-height: 300px;
   }
 }
 
