@@ -658,7 +658,11 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
 
     // Extract the content of the matched entry as UTF-8 string
     // Salesforce metadata files are always UTF-8 encoded text
-    const content = zip.readAsText(candidateEntry, 'utf8');
+    const entry = zip.getEntry(candidateEntry);
+    if (!entry) {
+      throw new Error(`Entry ${candidateEntry} not found in zip file`);
+    }
+    const content = zip.readAsText(entry, 'utf8');
 
     await rm(retrieveDir, { recursive: true, force: true });
     return content;
