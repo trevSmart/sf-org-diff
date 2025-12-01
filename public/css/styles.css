@@ -59,6 +59,36 @@ body {
   line-height: 1.6;
   margin: 18px;
   height: 100%;
+  position: relative;
+}
+
+/* Indicador de modo DEV */
+.dev-mode-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  z-index: 10000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.dev-mode-indicator i {
+  font-size: 14px;
+}
+
+.dev-mode-indicator span {
+  text-transform: uppercase;
 }
 
 .container {

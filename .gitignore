@@ -37,9 +37,8 @@ build/
 tmp/
 temp/
 
-.sf/*
-.sfdx/*
+# Salesforce CLI configuration (should not be versioned)
+.sf/
+.sfdx/
 force-app/
 sfdx-project.json
-.sf/config.json
-.sfdx/sfdx-config.json

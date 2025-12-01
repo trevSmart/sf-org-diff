@@ -30,6 +30,7 @@ const diffEditorSelect = document.getElementById('diffEditorSelect');
 const backBtn = document.getElementById('backBtn');
 const closeDiffBtn = document.getElementById('closeDiffBtn');
 const metadataTypesWarning = document.getElementById('metadataTypesWarning');
+const devModeIndicator = document.getElementById('devModeIndicator');
 let metadataTypeNames = [];
 
 // Inicializar selector de editor de diff
@@ -38,6 +39,14 @@ if (diffEditorSelect) {
   diffEditorSelect.addEventListener('change', (e) => {
     setActiveDiffEditorType(e.target.value);
   });
+}
+
+// Mostrar indicador de modo DEV si está activo
+if (DEV_MODE && devModeIndicator) {
+  devModeIndicator.style.display = 'flex';
+  // Ajustar el margin-top del body para que el contenido no quede oculto bajo el indicador
+  // El indicador tiene ~36px de altura (padding 8px*2 + contenido)
+  document.body.style.marginTop = '54px'; // 18px (margin original) + 36px (altura indicador)
 }
 
 /**
