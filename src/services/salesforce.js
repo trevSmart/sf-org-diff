@@ -641,15 +641,15 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       cwd: PROJECT_ROOT
     });
 
-    const { stdout: zipList } = await execAsync(`unzip -l "${zipPath}"`, {
+    const { stdout: zipList } = await execAsync(`unzip -Z1 "${zipPath}"`, {
       maxBuffer: 10 * 1024 * 1024,
       timeout: 120000
     });
 
     const zipEntries = zipList
       .split('\n')
-      .map(line => line.trim().split(/\s+/).pop())
-      .filter(entry => entry && entry.includes('/') && entry !== 'Archive:');
+      .map(line => line.trim())
+      .filter(entry => entry && entry.includes('/'));
 
     const candidateEntry = selectZipEntry(zipEntries, metadataType, componentName, filePath);
 
