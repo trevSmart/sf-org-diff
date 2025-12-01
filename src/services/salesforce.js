@@ -623,6 +623,10 @@ function validateMetadataIdentifier(identifier, identifierName) {
   if (!identifier || !safePattern.test(identifier)) {
     throw new Error(`Invalid ${identifierName}: contains disallowed characters`);
   }
+  // Explicitly reject path traversal attempts (consecutive dots)
+  if (identifier.includes('..')) {
+    throw new Error(`Invalid ${identifierName}: path traversal not allowed`);
+  }
 }
 
 /**
@@ -657,13 +661,13 @@ async function retrieveViaMetadataApi(metadataType, componentName, orgAlias, fil
       '--target-org', orgAlias,
       '--zip-file', zipPath,
       '--single-package',
-      '--wait', '240'  // Align with 5-minute (300s) timeout below with buffer
+      '--wait', '240'  // 4 minutes CLI wait, with 60s buffer before 5-minute Node timeout
     ];
 
     console.log(`[SF CLI] Executing: sf ${sfArgs.join(' ')}`);
     await execFileAsync('sf', sfArgs, {
       maxBuffer: 100 * 1024 * 1024,
-      timeout: 300000,  // 5 minutes
+      timeout: 300000,  // 5 minutes (60s buffer after CLI --wait 240)
       cwd: PROJECT_ROOT
     });
 
